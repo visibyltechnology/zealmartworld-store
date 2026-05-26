@@ -126,7 +126,6 @@ export const subscribeToUserNotifications = (userId, callback) => {
     const q = query(
       collection(db, 'notifications'),
       where('user_id', '==', userId),
-      orderBy('created_at', 'desc'),
       limit(50)
     );
 
@@ -134,6 +133,12 @@ export const subscribeToUserNotifications = (userId, callback) => {
       const notifications = [];
       querySnapshot.forEach((doc) => {
         notifications.push({ id: doc.id, ...doc.data() });
+      });
+      // Sort by created_at in descending order (newest first)
+      notifications.sort((a, b) => {
+        const timeA = a.created_at?.toMillis?.() || 0;
+        const timeB = b.created_at?.toMillis?.() || 0;
+        return timeB - timeA;
       });
       callback(notifications);
     });
@@ -155,7 +160,6 @@ export const getUserNotifications = async (userId, limitCount = 20) => {
     const q = query(
       collection(db, 'notifications'),
       where('user_id', '==', userId),
-      orderBy('created_at', 'desc'),
       limit(limitCount)
     );
 
@@ -163,6 +167,13 @@ export const getUserNotifications = async (userId, limitCount = 20) => {
     const notifications = [];
     querySnapshot.forEach((doc) => {
       notifications.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Sort by created_at in descending order (newest first)
+    notifications.sort((a, b) => {
+      const timeA = a.created_at?.toMillis?.() || 0;
+      const timeB = b.created_at?.toMillis?.() || 0;
+      return timeB - timeA;
     });
 
     return notifications;
