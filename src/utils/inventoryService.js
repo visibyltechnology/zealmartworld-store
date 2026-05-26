@@ -70,7 +70,13 @@ export const decreaseInventory = async (productId, quantity = 1) => {
       throw new Error('Product not found');
     }
 
-    const currentItems = productSnap.data().items_left || 0;
+    const product = productSnap.data();
+    // Skip inventory decrease for unlimited stock products
+    if (product.unlimited_stock) {
+      return product.items_left || 0;
+    }
+
+    const currentItems = product.items_left || 0;
     const newItems = Math.max(0, currentItems - quantity);
 
     await updateInventoryStatus(productId, newItems);

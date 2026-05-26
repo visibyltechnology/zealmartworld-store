@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } fro
 import { db } from '../../firebase';
 import {
   ArrowLeft, Save, Image as ImageIcon, AlertCircle,
-  Tag, Ruler, DollarSign, Star, Upload, X, CheckCircle2, Sparkles
+  Tag, Ruler, DollarSign, Star, Upload, X, CheckCircle2, Sparkles, Infinity
 } from 'lucide-react';
 import { uploadImage } from '../../utils/uploadImage';
 import toast from 'react-hot-toast';
@@ -40,6 +40,7 @@ export default function ProductForm() {
     featuredPosition: '',
     img: '',
     items_left: 0,
+    unlimited_stock: false,
     inventory_status: 'in_stock',
     is_hidden: false
   });
@@ -145,7 +146,8 @@ export default function ProductForm() {
         featured: formData.featured,
         featuredPosition: formData.featured ? Number(positionInput) || 0 : '',
         items_left: Number(formData.items_left || 0),
-        inventory_status: Number(formData.items_left || 0) === 0 ? 'out_of_stock' : (formData.inventory_status || 'in_stock'),
+        unlimited_stock: formData.unlimited_stock || false,
+        inventory_status: formData.unlimited_stock ? 'in_stock' : (Number(formData.items_left || 0) === 0 ? 'out_of_stock' : (formData.inventory_status || 'in_stock')),
         is_hidden: Boolean(formData.is_hidden),
         updatedAt: new Date()
       };
@@ -359,29 +361,40 @@ export default function ProductForm() {
             </div>
 
             {/* Inventory & Visibility */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
               <FieldGroup label="Items Left" icon={<Tag size={14} />} accent="#059669">
                 <input
                   type="number" name="items_left" value={formData.items_left}
-                  onChange={handleChange} required min="0"
-                  style={inputStyle}
+                  onChange={handleChange} required min="0" disabled={formData.unlimited_stock}
+                  style={{...inputStyle, opacity: formData.unlimited_stock ? 0.6 : 1}}
                   onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
                   onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
                 />
               </FieldGroup>
-              <FieldGroup label="Inventory Status" icon={<Sparkles size={14} />} accent="#059669">
+              <FieldGroup label="Unlimited Stock" icon={<Infinity size={14} />} accent="#059669">
+                <div style={{ display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 10, background: formData.unlimited_stock ? '#ecfdf5' : '#fff', border: `1px solid ${formData.unlimited_stock ? '#a7f3d0' : '#e5e7eb'}`, borderRadius: 10 }}>
+                  <input
+                    type="checkbox" name="unlimited_stock" checked={formData.unlimited_stock}
+                    onChange={handleChange}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#059669' }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: formData.unlimited_stock ? '#059669' : '#9ca3af' }}>Unlimited</span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>Never runs out of stock</p>
+              </FieldGroup>
+              <FieldGroup label="Inventory Status" icon={<CheckCircle2 size={14} />} accent="#059669">
                 <div style={{
                   display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 12,
-                  background: Number(formData.items_left || 0) > 0 ? '#ecfdf5' : '#fef2f2',
-                  border: `1px solid ${Number(formData.items_left || 0) > 0 ? '#a7f3d0' : '#fca5a5'}`,
+                  background: (formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#ecfdf5' : '#fef2f2',
+                  border: `1px solid ${(formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#a7f3d0' : '#fca5a5'}`,
                   borderRadius: 10, fontWeight: 600, fontSize: 13,
-                  color: Number(formData.items_left || 0) > 0 ? '#059669' : '#dc2626'
+                  color: (formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#059669' : '#dc2626'
                 }}>
-                  <i className={`fas ${Number(formData.items_left || 0) > 0 ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2`}></i>
-                  {Number(formData.items_left || 0) > 0 ? 'In Stock' : 'Out of Stock'}
+                  <i className={`fas ${(formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2`}></i>
+                  {formData.unlimited_stock || Number(formData.items_left || 0) > 0 ? 'In Stock' : 'Out of Stock'}
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
-                  {Number(formData.items_left || 0) > 0 ? `${formData.items_left} items available` : 'Set items left to update'}
+                  {formData.unlimited_stock ? 'Unlimited' : (Number(formData.items_left || 0) > 0 ? `${formData.items_left} available` : 'Out of stock')}
                 </p>
               </FieldGroup>
               <FieldGroup label="Hidden from Shop" icon={<AlertCircle size={14} />} accent="#dc2626">
