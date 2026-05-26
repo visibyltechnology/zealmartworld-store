@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, Check, Copy, Eye, EyeOff } from 'lucide-react';
 import {
   subscribeToUserNotifications,
@@ -31,7 +32,8 @@ const NOTIFICATION_COLOR_MAP = {
   [NOTIFICATION_TYPES.STOCK_ALERT]: { bg: '#fee2e2', accent: '#dc2626', border: '#fca5a5' }
 };
 
-function NotificationBell({ userId }) {
+function NotificationBell({ userId, isMobile = false }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -224,11 +226,17 @@ function NotificationBell({ userId }) {
       {/* Bell Button */}
       <button
         ref={bellButtonRef}
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        onClick={() => {
+          if (isMobile) {
+            navigate('/notifications');
+          } else {
+            setIsOpen(!isOpen);
+          }
+        }}
+        className={`relative p-2 transition-colors ${isMobile ? 'text-gray-800 text-2xl' : 'text-gray-600 hover:text-gray-900'}`}
         title="Notifications"
       >
-        <Bell size={20} />
+        <Bell size={isMobile ? 24 : 20} />
         {unreadCount > 0 && (
           <span
             style={{
@@ -253,8 +261,8 @@ function NotificationBell({ userId }) {
         )}
       </button>
 
-      {/* Dropdown */}
-      {isOpen && (
+      {/* Dropdown - Desktop only */}
+      {isOpen && !isMobile && (
         <div
           ref={dropdownRef}
           style={{

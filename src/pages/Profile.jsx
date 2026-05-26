@@ -464,6 +464,33 @@ export default function Profile() {
                                 </div>
                               </div>
 
+                              {/* Order Status Section */}
+                              <div className="p-5 bg-white border-t border-gray-100">
+                                <div className="mb-4">
+                                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Delivery Status</h3>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider ${isComplete ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                                      {isComplete ? (
+                                        <>
+                                          <i className="fas fa-box text-sm"></i> Ready for Delivery
+                                        </>
+                                      ) : (
+                                        <>
+                                          <i className="fas fa-hourglass-half text-sm animate-pulse"></i> Processing
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
+                                  {isComplete && (
+                                    <div className="mt-3">
+                                      <Link to="/delivery" className="inline-flex items-center gap-2 bg-zeal-blue text-white font-bold py-2 px-4 rounded-sm text-sm uppercase tracking-wider hover:bg-blue-900 transition-colors shadow-md">
+                                        <i className="fas fa-map-location-dot"></i> Track Delivery
+                                      </Link>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
                               {/* Installment Schedule Breakdown */}
                               {combinedPeriodPayment > 0 && (
                                 <div className="p-5 bg-white">

@@ -15,6 +15,7 @@ const VerifyOTP     = lazy(() => import('./pages/VerifyOTP'));
 const Profile       = lazy(() => import('./pages/Profile'));
 const Cart          = lazy(() => import('./pages/Cart'));
 const DeliveryPortal = lazy(() => import('./pages/DeliveryPortal'));
+const Notifications  = lazy(() => import('./pages/Notifications'));
 
 // Admin pages
 const AdminLayout      = lazy(() => import('./pages/Admin/AdminLayout'));
@@ -100,6 +101,7 @@ function App() {
           <Route path="/register"       element={<Register />} />
           <Route path="/verify-otp"     element={<VerifyOTP />} />
           <Route path="/profile"        element={user ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/notifications"  element={user ? <Notifications /> : <Navigate to="/login" />} />
           <Route path="/cart"           element={<Cart />} />
           <Route path="/delivery"       element={<DeliveryPortal />} />
 

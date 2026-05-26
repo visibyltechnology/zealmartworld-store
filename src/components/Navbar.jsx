@@ -144,6 +144,9 @@ export default function Navbar() {
 
                     {/* Mobile Toggles */}
                     <div className="flex md:hidden items-center gap-4">
+                        {user && !isAdmin && (
+                            <NotificationBell userId={user.uid} isMobile={true} />
+                        )}
                         {!isAdmin && (
                         <Link to="/cart" className="relative text-gray-800">
                             <i className="fas fa-shopping-cart text-2xl"></i>
