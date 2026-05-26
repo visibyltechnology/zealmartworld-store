@@ -1,0 +1,662 @@
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
+import {
+  ArrowLeft, Save, Image as ImageIcon, AlertCircle,
+  Tag, Ruler, DollarSign, Star, Upload, X, CheckCircle2, Sparkles
+} from 'lucide-react';
+import { uploadImage } from '../../utils/uploadImage';
+import toast from 'react-hot-toast';
+
+const CATEGORIES = ['Air Conditioners', 'Televisions', 'Washing Machines', 'Refrigerators', 'Generators', 'Phones', 'Laptops', 'Audio', 'Gaming'];
+
+const CATEGORY_COLORS = {
+  'Air Conditioners':  { bg: 'rgba(59,130,246,0.12)', text: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
+  'Televisions':     { bg: 'rgba(139,92,246,0.12)', text: '#7c3aed', border: 'rgba(139,92,246,0.35)' },
+  'Washing Machines': { bg: 'rgba(236,72,153,0.12)', text: '#db2777', border: 'rgba(236,72,153,0.35)' },
+  'Refrigerators': { bg: 'rgba(245,158,11,0.12)', text: '#d97706', border: 'rgba(245,158,11,0.35)' },
+  'Generators': { bg: 'rgba(16,185,129,0.12)', text: '#059669', border: 'rgba(16,185,129,0.35)' },
+  'Phones': { bg: 'rgba(6,182,212,0.12)', text: '#0891b2', border: 'rgba(6,182,212,0.35)' },
+  'Laptops': { bg: 'rgba(168,85,247,0.12)', text: '#a855f7', border: 'rgba(168,85,247,0.35)' },
+  'Audio': { bg: 'rgba(244,63,94,0.12)', text: '#f43f5e', border: 'rgba(244,63,94,0.35)' },
+  'Gaming': { bg: 'rgba(251,146,60,0.12)', text: '#fb923c', border: 'rgba(251,146,60,0.35)' },
+};
+
+export default function ProductForm() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEditing = !!id;
+  const fileInputRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    category: 'Air Conditioners',
+    length: '18"',
+    price: '',
+    pss: '',
+    featured: false,
+    featuredPosition: '',
+    img: '',
+    items_left: 0,
+    inventory_status: 'in_stock',
+    is_hidden: false
+  });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [showFeaturedModal, setShowFeaturedModal] = useState(false);
+  const [positionInput, setPositionInput] = useState('');
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (isEditing) {
+      const fetchProduct = async () => {
+        try {
+          const docRef = doc(db, 'products', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setFormData(data);
+            if (data.featured) {
+              setPositionInput(data.featuredPosition || '');
+            }
+          } else {
+            setError('Product not found');
+          }
+        } catch {
+          setError('Failed to load product');
+        }
+      };
+      fetchProduct();
+    }
+  }, [id, isEditing]);
+
+  // Fetch featured products list
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      try {
+        const q = query(collection(db, "products"), where("featured", "==", true));
+        const snap = await getDocs(q);
+        const featured = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.featuredPosition || 999) - (b.featuredPosition || 999));
+        setFeaturedProducts(featured);
+      } catch (err) {
+        console.error('Error fetching featured products:', err);
+      }
+    };
+    fetchFeatured();
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const processFile = (file) => {
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageChange = (e) => processFile(e.target.files[0]);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    processFile(e.dataTransfer.files[0]);
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Confirmation dialog
+    const confirmMsg = isEditing 
+      ? `Are you sure you want to update "${formData.name}"?` 
+      : `Add "${formData.name}" to products?`;
+    
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      let imageUrl = formData.img;
+      if (imageFile) imageUrl = await uploadImage(imageFile);
+      if (!imageUrl) throw new Error('Product image is required');
+
+      const payload = {
+        ...formData,
+        price: Number(formData.price),
+        pss: Number(formData.pss || 0),
+        img: imageUrl,
+        featured: formData.featured,
+        featuredPosition: formData.featured ? Number(positionInput) || 0 : '',
+        items_left: Number(formData.items_left || 0),
+        inventory_status: Number(formData.items_left || 0) === 0 ? 'out_of_stock' : (formData.inventory_status || 'in_stock'),
+        is_hidden: Boolean(formData.is_hidden),
+        updatedAt: new Date()
+      };
+
+      if (isEditing) {
+        await updateDoc(doc(db, 'products', id), payload);
+        toast.success('Product updated successfully!');
+      } else {
+        const newRef = doc(collection(db, 'products'));
+        payload.createdAt = new Date();
+        await setDoc(newRef, payload);
+        toast.success('Product created successfully!');
+      }
+      navigate('/admin');
+    } catch (err) {
+      if (err.message?.toLowerCase().includes('offline')) {
+        setError('Please check your internet connection and try again.');
+      } else {
+        setError(err.message || 'Failed to save product. Please try again later.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFeaturedToggle = () => {
+    if (!formData.featured) {
+      // Toggling ON - show modal for position
+      setPositionInput(formData.featuredPosition || String(featuredProducts.length + 1));
+      setShowFeaturedModal(true);
+    } else {
+      // Toggling OFF - just disable it
+      setFormData(prev => ({ ...prev, featured: false, featuredPosition: '' }));
+    }
+  };
+
+  const handleSetFeaturedPosition = () => {
+    if (!positionInput || isNaN(positionInput)) {
+      alert('Please enter a valid position number');
+      return;
+    }
+    setFormData(prev => ({ 
+      ...prev, 
+      featured: true, 
+      featuredPosition: positionInput 
+    }));
+    setShowFeaturedModal(false);
+  };
+
+  const catColor = CATEGORY_COLORS[formData.category] || CATEGORY_COLORS['Air Conditioners'];
+  const currentImg = imagePreview || formData.img;
+  const hasDiscount = formData.pss && formData.price && Number(formData.pss) < Number(formData.price);
+  const discountPct = hasDiscount
+    ? Math.round(100 - (Number(formData.pss) / Number(formData.price)) * 100)
+    : 0;
+
+  return (
+    <div style={{ maxWidth: 760, margin: '0 auto' }}>
+      {/* Back link */}
+      <Link
+        to="/admin"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          fontSize: 12, fontWeight: 700, color: '#6b7280',
+          textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.1em',
+          marginBottom: 24, transition: 'color 0.2s'
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = '#dc2626'}
+        onMouseLeave={e => e.currentTarget.style.color = '#6b7280'}
+      >
+        <ArrowLeft size={15} /> Back to Products
+      </Link>
+
+      {/* Card */}
+      <div style={{
+        background: 'linear-gradient(135deg,#fff 0%,#f8f7ff 100%)',
+        borderRadius: 20, border: '1px solid #e5e7eb',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.07)',
+        overflow: 'hidden'
+      }}>
+
+        {/* Header banner */}
+        <div style={{
+          background: 'linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%)',
+          padding: '28px 36px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <Sparkles size={18} color="#f59e0b" />
+              <span style={{ color: '#f59e0b', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                Product Management
+              </span>
+            </div>
+            <h1 style={{ margin: 0, color: '#fff', fontSize: 26, fontWeight: 900, letterSpacing: '-0.02em' }}>
+              {isEditing ? '✏️ Edit Product' : '✨ Add New Product'}
+            </h1>
+          </div>
+          {currentImg && (
+            <div style={{
+              width: 64, height: 64, borderRadius: 12,
+              border: '2px solid rgba(255,255,255,0.2)',
+              overflow: 'hidden', background: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <img src={currentImg} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
+        </div>
+
+        {/* Form body */}
+        <div style={{ padding: '36px' }}>
+          {error && (
+            <div style={{
+              background: 'linear-gradient(135deg,#fef2f2,#fee2e2)',
+              border: '1px solid #fca5a5', borderRadius: 12,
+              padding: '14px 18px', marginBottom: 24,
+              display: 'flex', alignItems: 'center', gap: 10,
+              color: '#dc2626', fontWeight: 600, fontSize: 14
+            }}>
+              <AlertCircle size={18} /> {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* Product Name */}
+            <FieldGroup label="Product Name" icon={<Tag size={14} />} accent="#7c3aed">
+              <input
+                type="text" name="name" value={formData.name}
+                onChange={handleChange} required
+                placeholder="e.g. Samsung 65 inch 4K Smart TV"
+                style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = '#7c3aed'; e.target.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.12)'; }}
+                onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+              />
+            </FieldGroup>
+
+            {/* Category + Length */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <FieldGroup label="Category" icon={<Tag size={14} />} accent={catColor.text}>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    name="category" value={formData.category} onChange={handleChange}
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: 16, cursor: 'pointer',
+                      background: catColor.bg,
+                      borderColor: catColor.border,
+                      color: catColor.text, fontWeight: 700,
+                      appearance: 'none'
+                    }}
+                    onFocus={e => { e.target.style.boxShadow = `0 0 0 3px ${catColor.bg}`; }}
+                    onBlur={e => { e.target.style.boxShadow = 'none'; }}
+                  >
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: catColor.text }}>▾</div>
+                </div>
+              </FieldGroup>
+
+              <FieldGroup label='Model/Specifications' icon={<Ruler size={14} />} accent="#059669">
+                <input
+                  type="text" name="length" value={formData.length}
+                  onChange={handleChange} required placeholder='e.g. 18"'
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
+              </FieldGroup>
+            </div>
+
+            {/* Prices */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <FieldGroup label="Full Price (₦)" icon={<DollarSign size={14} />} accent="#1d4ed8">
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontWeight: 700, fontSize: 14 }}>₦</span>
+                  <input
+                    type="number" name="price" value={formData.price}
+                    onChange={handleChange} required placeholder="150000"
+                    style={{ ...inputStyle, paddingLeft: 34 }}
+                    onFocus={e => { e.target.style.borderColor = '#1d4ed8'; e.target.style.boxShadow = '0 0 0 3px rgba(29,78,216,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  />
+                </div>
+              </FieldGroup>
+
+              <FieldGroup label="Sale Price (₦)" icon={<DollarSign size={14} />} accent="#dc2626">
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontWeight: 700, fontSize: 14 }}>₦</span>
+                  <input
+                    type="number" name="pss" value={formData.pss}
+                    onChange={handleChange} placeholder="Optional discount price"
+                    style={{ ...inputStyle, paddingLeft: 34 }}
+                    onFocus={e => { e.target.style.borderColor = '#dc2626'; e.target.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  {hasDiscount && (
+                    <span style={{
+                      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                      background: 'linear-gradient(135deg,#dc2626,#ef4444)',
+                      color: '#fff', fontSize: 10, fontWeight: 800,
+                      padding: '2px 7px', borderRadius: 99, letterSpacing: '0.05em'
+                    }}>
+                      -{discountPct}% OFF
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>Leave empty if no sale</p>
+              </FieldGroup>
+            </div>
+
+            {/* Inventory & Visibility */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+              <FieldGroup label="Items Left" icon={<Tag size={14} />} accent="#059669">
+                <input
+                  type="number" name="items_left" value={formData.items_left}
+                  onChange={handleChange} required min="0"
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
+              </FieldGroup>
+              <FieldGroup label="Inventory Status" icon={<Sparkles size={14} />} accent="#059669">
+                <div style={{ position: 'relative' }}>
+                  <select
+                    name="inventory_status" value={formData.inventory_status} onChange={handleChange}
+                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none', background: '#fff' }}
+                    onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  >
+                    <option value="in_stock">In Stock</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                  </select>
+                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
+                </div>
+              </FieldGroup>
+              <FieldGroup label="Hidden from Shop" icon={<AlertCircle size={14} />} accent="#dc2626">
+                <div style={{ display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 10, background: formData.is_hidden ? '#fef2f2' : '#fff', border: `1px solid ${formData.is_hidden ? '#fca5a5' : '#e5e7eb'}`, borderRadius: 10 }}>
+                  <input
+                    type="checkbox" name="is_hidden" checked={formData.is_hidden}
+                    onChange={handleChange}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#dc2626' }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: formData.is_hidden ? '#dc2626' : '#374151' }}>Hide Product</span>
+                </div>
+              </FieldGroup>
+            </div>
+
+            {/* Image Upload */}
+            <FieldGroup label="Product Image" icon={<ImageIcon size={14} />} accent="#f59e0b">
+              <div
+                onDrop={handleDrop}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${dragOver ? '#f59e0b' : '#d1d5db'}`,
+                  borderRadius: 14,
+                  padding: currentImg ? 16 : 40,
+                  background: dragOver ? 'rgba(245,158,11,0.06)' : '#fafafa',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  flexDirection: currentImg ? 'row' : 'column',
+                  alignItems: 'center',
+                  justifyContent: currentImg ? 'flex-start' : 'center',
+                  gap: 16,
+                  position: 'relative'
+                }}
+              >
+                {currentImg ? (
+                  <>
+                    <div style={{
+                      width: 80, height: 80, borderRadius: 10, overflow: 'hidden',
+                      border: '2px solid #e5e7eb', flexShrink: 0,
+                      background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <img src={currentImg} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: '#111827' }}>
+                        {imageFile ? imageFile.name : 'Current Image'}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>Click or drop to replace</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); clearImage(); }}
+                      style={{
+                        position: 'absolute', top: 10, right: 10,
+                        width: 26, height: 26, borderRadius: 99,
+                        background: '#dc2626', color: '#fff', border: 'none',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{
+                      width: 56, height: 56, borderRadius: 12,
+                      background: 'linear-gradient(135deg,#fef3c7,#fde68a)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <Upload size={24} color="#f59e0b" />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#374151' }}>
+                        Drop image here or <span style={{ color: '#f59e0b', textDecoration: 'underline' }}>browse</span>
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>PNG, JPG, WEBP up to 10MB</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file" accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: 'none' }}
+              />
+            </FieldGroup>
+
+            {/* Featured toggle */}
+            <div
+              onClick={handleFeaturedToggle}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '16px 20px', borderRadius: 14, cursor: 'pointer',
+                border: `2px solid ${formData.featured ? 'rgba(245,158,11,0.4)' : '#e5e7eb'}`,
+                background: formData.featured
+                  ? 'linear-gradient(135deg,rgba(245,158,11,0.08),rgba(251,191,36,0.06))'
+                  : '#f9fafb',
+                transition: 'all 0.25s', userSelect: 'none'
+              }}
+            >
+              <div style={{
+                width: 48, height: 26, borderRadius: 99,
+                background: formData.featured ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : '#d1d5db',
+                position: 'relative', transition: 'all 0.25s', flexShrink: 0,
+                boxShadow: formData.featured ? '0 2px 8px rgba(245,158,11,0.4)' : 'none'
+              }}>
+                <div style={{
+                  position: 'absolute', top: 3, left: formData.featured ? 25 : 3,
+                  width: 20, height: 20, borderRadius: 99, background: '#fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.25s'
+                }} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: '#111827' }}>
+                  <Star size={16} color={formData.featured ? '#f59e0b' : '#9ca3af'} fill={formData.featured ? '#f59e0b' : 'none'} />
+                  Feature on Homepage
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
+                  This product will appear in the featured section
+                </p>
+              </div>
+              {formData.featured && (
+                <span style={{
+                  marginLeft: 'auto', background: 'linear-gradient(135deg,#f59e0b,#fbbf24)',
+                  color: '#fff', fontSize: 10, fontWeight: 800,
+                  padding: '3px 10px', borderRadius: 99, letterSpacing: '0.08em'
+                }}>
+                  FEATURED
+                </span>
+              )}
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit" disabled={loading}
+              style={{
+                width: '100%', padding: '16px',
+                background: loading
+                  ? '#9ca3af'
+                  : 'linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%)',
+                color: '#fff', border: 'none', borderRadius: 14,
+                fontSize: 14, fontWeight: 800, letterSpacing: '0.08em',
+                textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                boxShadow: loading ? 'none' : '0 8px 24px rgba(15,52,96,0.35)',
+                transition: 'all 0.2s',
+                marginTop: 8
+              }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(15,52,96,0.45)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(15,52,96,0.35)'; }}
+            >
+              {loading ? (
+                <><i className="fas fa-circle-notch fa-spin" /> Saving...</>
+              ) : (
+                <><CheckCircle2 size={18} /> {isEditing ? 'Update Product' : 'Save Product'}</>
+              )}
+            </button>
+
+            {/* Currently Featured Products */}
+            {formData.featured && featuredProducts.length > 0 && (
+              <div style={{
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: 12,
+                padding: '14px 16px',
+                fontSize: 12,
+                color: '#92400e'
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Currently Featured Products:</div>
+                {featuredProducts.map((p, i) => (
+                  <div key={p.id} style={{ fontSize: 11, marginBottom: 4 }}>
+                    #{p.featuredPosition || (i+1)} - {p.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </form>
+
+          {/* Featured Position Modal */}
+          {showFeaturedModal && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: '#fff', borderRadius: 16,
+                padding: '28px', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }}>
+                <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 800, color: '#1a1a2e' }}>
+                  Set Featured Position
+                </h2>
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#6b7280' }}>
+                  Enter the position (1-12) where this product should appear in the featured section.
+                  {featuredProducts.length > 0 && (
+                    <> Currently {featuredProducts.length} products are featured.</>
+                  )}
+                </p>
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={positionInput}
+                  onChange={(e) => setPositionInput(e.target.value)}
+                  style={{
+                    width: '100%', padding: '12px', border: '1px solid #e5e7eb',
+                    borderRadius: 8, fontSize: 14, marginBottom: 16,
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="Position (1-12)"
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button
+                    onClick={() => setShowFeaturedModal(false)}
+                    style={{
+                      flex: 1, padding: '12px', background: '#f3f4f6',
+                      border: 'none', borderRadius: 8, cursor: 'pointer',
+                      fontWeight: 700, color: '#374151', transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#e5e7eb'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#f3f4f6'}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSetFeaturedPosition}
+                    style={{
+                      flex: 1, padding: '12px',
+                      background: 'linear-gradient(135deg,#f59e0b,#fbbf24)',
+                      border: 'none', borderRadius: 8, cursor: 'pointer',
+                      fontWeight: 700, color: '#fff', transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                  >
+                    Set Position
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldGroup({ label, icon, accent, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <label style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+        letterSpacing: '0.12em', color: accent || '#374151'
+      }}>
+        {icon} {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: '100%',
+  background: '#fff',
+  border: '1.5px solid #e5e7eb',
+  borderRadius: 10,
+  padding: '12px 16px',
+  fontSize: 14,
+  fontWeight: 500,
+  color: '#111827',
+  outline: 'none',
+  transition: 'all 0.2s',
+  boxSizing: 'border-box',
+};
