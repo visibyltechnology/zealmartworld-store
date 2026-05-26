@@ -6,6 +6,7 @@ import useAuthStore from '../store/useAuthStore';
 import Footer from '../components/Footer';
 import { Package, Clock, CheckCircle, ShoppingBag, Search, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { createPaymentSuccessNotification } from '../utils/notificationService';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -90,6 +91,13 @@ export default function Profile() {
         return o;
       }));
       
+      // Create a payment success notification for the user
+      try {
+        if (user?.uid) await createPaymentSuccessNotification(user.uid, order.id, amountToPay);
+      } catch (notifErr) {
+        console.error('Failed to create payment success notification:', notifErr);
+      }
+
       toast.success('Payment recorded successfully!');
       
       setCustomAmounts(prev => {

@@ -1,6 +1,7 @@
 import { doc, updateDoc, getDoc, Timestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateDeliveryOTP } from './otpService';
+import { createOrderOTPNotification } from './notificationService';
 
 /**
  * Order Tracking Service
@@ -113,6 +114,19 @@ export const shipOrder = async (orderId, deliveryEmail) => {
       delivery_token: generateDeliveryToken(orderId),
       updated_at: Timestamp.now()
     });
+
+    // Notify user via notifications collection (if order has user info)
+    try {
+      const orderSnap = await getDoc(orderRef);
+      const orderData = orderSnap.exists() ? orderSnap.data() : null;
+      const userId = orderData?.userId || orderData?.user_id || null;
+      if (userId) {
+        await createOrderOTPNotification(userId, orderId, otp);
+      }
+    } catch (notifErr) {
+      // Log but don't fail the whole operation
+      console.error('Failed to create order OTP notification:', notifErr);
+    }
 
     return otp;
   } catch (error) {
