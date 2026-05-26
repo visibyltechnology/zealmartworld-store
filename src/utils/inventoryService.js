@@ -23,6 +23,7 @@ export const initializeProductInventory = (product) => {
     ...product,
     inventory_status: INVENTORY_STATUS.IN_STOCK,
     items_left: product.items_left || 0,
+    unlimited_stock: product.unlimited_stock || false,
     is_hidden: false,
     created_at: Timestamp.now(),
     updated_at: Timestamp.now()
@@ -154,9 +155,33 @@ export const setInventoryStatus = async (productId, status) => {
  * @returns {boolean}
  */
 export const isProductInStock = (product) => {
-  return product?.inventory_status === INVENTORY_STATUS.IN_STOCK && 
-         product?.items_left > 0 && 
-         !product?.is_hidden;
+  // Default to in stock if fields are missing
+  const status = product?.inventory_status || INVENTORY_STATUS.IN_STOCK;
+  const unlimitedStock = product?.unlimited_stock || false;
+  const itemsLeft = product?.items_left !== undefined ? product.items_left : 5;
+  const isHidden = product?.is_hidden || false;
+  
+  return status === INVENTORY_STATUS.IN_STOCK && 
+         (unlimitedStock || itemsLeft > 0) && 
+         !isHidden;
+};
+
+/**
+ * Get stock display text
+ * @param {Object} product - Product object
+ * @returns {string} Display text for stock status
+ */
+export const getStockDisplayText = (product) => {
+  if (!isProductInStock(product)) {
+    return 'Out of Stock';
+  }
+  
+  if (product?.unlimited_stock) {
+    return 'In Stock';
+  }
+  
+  const itemsLeft = product?.items_left || 0;
+  return `In Stock (${itemsLeft})`;
 };
 
 /**
@@ -178,5 +203,6 @@ export default {
   setProductVisibility,
   setInventoryStatus,
   isProductInStock,
-  isProductAvailable
+  isProductAvailable,
+  getStockDisplayText
 };

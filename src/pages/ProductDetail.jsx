@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import useCartStore from '../store/useCartStore';
-import { isProductInStock, INVENTORY_STATUS } from '../utils/inventoryService';
+import { isProductInStock, INVENTORY_STATUS, getStockDisplayText } from '../utils/inventoryService';
 
 const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
 
@@ -33,7 +33,17 @@ export default function ProductDetail() {
         const docRef = doc(db, "products", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setProduct({ id: docSnap.id, ...docSnap.data() });
+          const data = docSnap.data();
+          // Ensure product has inventory fields
+          const productWithInventory = {
+            id: docSnap.id,
+            ...data,
+            inventory_status: data.inventory_status || 'in_stock',
+            items_left: data.items_left !== undefined ? data.items_left : 5,
+            unlimited_stock: data.unlimited_stock || false,
+            is_hidden: data.is_hidden || false
+          };
+          setProduct(productWithInventory);
         } else {
           setError("Product not found");
         }
@@ -128,7 +138,7 @@ export default function ProductDetail() {
               )}
               <div className="flex items-center gap-4 text-sm font-medium">
                 {isProductInStock(product) ? (
-                  <>
+                  <>{getStockDisplayText(product)}
                     <span className="flex items-center gap-1 text-green-600"><CheckCircle size={16} /> In Stock ({product.items_left || 0})</span>
                     <span className="flex items-center gap-1 text-green-600"><ShieldCheck size={16} /> Official Warranty</span>
                   </>
