@@ -4,6 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import useCartStore from '../store/useCartStore';
+import NotificationBell from './NotificationBell';
 import toast from 'react-hot-toast';
 
 export default function Navbar() {
@@ -91,6 +92,9 @@ export default function Navbar() {
 
                     {/* Actions - Desktop */}
                     <div className="hidden md:flex items-center gap-6">
+                        {user && (
+                            <NotificationBell userId={user.uid} />
+                        )}
                         {user ? (
                             <div className="flex items-center gap-4">
                                 <Link to="/profile" className="flex items-center gap-2 text-gray-700 hover:text-zeal-red transition group">

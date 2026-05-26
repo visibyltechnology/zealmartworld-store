@@ -3,6 +3,7 @@ import { useSearchParams, useLocation, Link, useNavigate } from 'react-router-do
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
+import { isProductInStock } from '../utils/inventoryService';
 
 const CATEGORIES = [
     'All', 'Air Conditioners', 'Televisions', 'Refrigerators', 'Generators', 'Washing Machines', 'Phones', 'Laptops', 'Audio', 'Gaming'
@@ -188,7 +189,7 @@ export default function Shop() {
                                         <img src={p.img} alt={p.name} className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-500" />
                                     </div>
                                     
-                                    <div className="p-4 flex flex-col flex-grow">
+                    <div className="p-4 flex flex-col flex-grow">
                                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                             {p.brand || 'Official Partner'}
                                         </p>
@@ -197,6 +198,19 @@ export default function Shop() {
                                         </h3>
                                         
                                         <div className="mt-auto">
+                                            {/* Inventory Status */}
+                                            <div className="mb-2">
+                                                {isProductInStock(p) ? (
+                                                    <span className="inline-flex items-center gap-1 text-green-600 text-xs font-bold uppercase tracking-wider">
+                                                        <i className="fas fa-check-circle text-xs"></i> In Stock ({p.items_left || 0})
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-red-600 text-xs font-bold uppercase tracking-wider">
+                                                        <i className="fas fa-exclamation-circle text-xs"></i> Out of Stock
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
                                             <div className="mb-3">
                                                 <span className="text-xl font-display font-black text-zeal-red block">
                                                     ₦{Number(p.price).toLocaleString()}
@@ -210,9 +224,10 @@ export default function Shop() {
                                             
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/products/${p.id}`); }}
-                                                className="w-full bg-white border border-zeal-blue text-zeal-blue hover:bg-zeal-blue hover:text-white font-bold py-2.5 rounded-sm text-sm transition-colors flex justify-center items-center gap-2 uppercase tracking-wide"
+                                                disabled={!isProductInStock(p)}
+                                                className={`w-full ${isProductInStock(p) ? 'bg-white border-zeal-blue text-zeal-blue hover:bg-zeal-blue hover:text-white' : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'} border font-bold py-2.5 rounded-sm text-sm transition-colors flex justify-center items-center gap-2 uppercase tracking-wide`}
                                             >
-                                                <i className="fas fa-shopping-cart"></i> Add To Cart
+                                                <i className="fas fa-shopping-cart"></i> {isProductInStock(p) ? 'Add To Cart' : 'Out of Stock'}
                                             </button>
                                         </div>
                                     </div>

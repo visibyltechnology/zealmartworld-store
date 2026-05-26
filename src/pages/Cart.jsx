@@ -9,6 +9,11 @@ import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
 import { checkCartAccess } from '../utils/rbac';
 import { initializeOrderTracking } from '../utils/orderTrackingService';
+import { decreaseInventory } from '../utils/inventoryService';
+import {
+  createOrderPlacedNotification,
+  createPaymentSuccessNotification
+} from '../utils/notificationService';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -146,7 +151,16 @@ export default function Cart() {
           const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
           const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
 
-          await addDoc(collection(db, "orders"), initializeOrderTracking({
+          // Decrement inventory for each item in the order
+          for (const item of groupItems) {
+            try {
+              await decreaseInventory(item.id, item.quantity);
+            } catch (inventoryErr) {
+              console.error('Error updating inventory for item:', item.id, inventoryErr);
+            }
+          }
+
+          const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
             userId: user.uid,
             items: groupItems,
             deliveryInfo: deliveryInfo,
@@ -156,18 +170,44 @@ export default function Cart() {
             paymentRef: `MOCK_REF_${Date.now()}_G${gId}`,
             createdAt: new Date(),
           }));
+
+          // Create notifications
+          try {
+            await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
+            await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
+          } catch (notifErr) {
+            console.error('Error creating notifications:', notifErr);
+          }
         }
       } else {
-        await addDoc(collection(db, "orders"), initializeOrderTracking({
+        // Decrement inventory for each item in the order
+        for (const item of items) {
+          try {
+            await decreaseInventory(item.id, item.quantity);
+          } catch (inventoryErr) {
+            console.error('Error updating inventory for item:', item.id, inventoryErr);
+          }
+        }
+
+        const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+        const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
           userId: user.uid,
           items: items,
           deliveryInfo: deliveryInfo,
-          totalAmount: items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0),
+          totalAmount: orderTotalAmount,
           amountPaid: totalToPayNow,
           status: 'Processing',
           paymentRef: `MOCK_REF_${Date.now()}`,
           createdAt: new Date(),
         }));
+
+        // Create notifications
+        try {
+          await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
+          await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow);
+        } catch (notifErr) {
+          console.error('Error creating notifications:', notifErr);
+        }
       }
 
       clearCart();

@@ -370,18 +370,19 @@ export default function ProductForm() {
                 />
               </FieldGroup>
               <FieldGroup label="Inventory Status" icon={<Sparkles size={14} />} accent="#059669">
-                <div style={{ position: 'relative' }}>
-                  <select
-                    name="inventory_status" value={formData.inventory_status} onChange={handleChange}
-                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none', background: '#fff' }}
-                    onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
-                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                  >
-                    <option value="in_stock">In Stock</option>
-                    <option value="out_of_stock">Out of Stock</option>
-                  </select>
-                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 12,
+                  background: Number(formData.items_left || 0) > 0 ? '#ecfdf5' : '#fef2f2',
+                  border: `1px solid ${Number(formData.items_left || 0) > 0 ? '#a7f3d0' : '#fca5a5'}`,
+                  borderRadius: 10, fontWeight: 600, fontSize: 13,
+                  color: Number(formData.items_left || 0) > 0 ? '#059669' : '#dc2626'
+                }}>
+                  <i className={`fas ${Number(formData.items_left || 0) > 0 ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2`}></i>
+                  {Number(formData.items_left || 0) > 0 ? 'In Stock' : 'Out of Stock'}
                 </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  {Number(formData.items_left || 0) > 0 ? `${formData.items_left} items available` : 'Set items left to update'}
+                </p>
               </FieldGroup>
               <FieldGroup label="Hidden from Shop" icon={<AlertCircle size={14} />} accent="#dc2626">
                 <div style={{ display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 10, background: formData.is_hidden ? '#fef2f2' : '#fff', border: `1px solid ${formData.is_hidden ? '#fca5a5' : '#e5e7eb'}`, borderRadius: 10 }}>

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ArrowLeft, ChevronDown, CheckCircle, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, ChevronDown, CheckCircle, ShieldCheck, AlertCircle } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import useCartStore from '../store/useCartStore';
+import { isProductInStock, INVENTORY_STATUS } from '../utils/inventoryService';
 
 const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
 
@@ -125,9 +126,17 @@ export default function ProductDetail() {
                   {product.length}
                 </span>
               )}
-              <div className="flex items-center gap-4 text-sm font-medium text-green-600">
-                <span className="flex items-center gap-1"><CheckCircle size={16} /> In Stock</span>
-                <span className="flex items-center gap-1"><ShieldCheck size={16} /> Official Warranty</span>
+              <div className="flex items-center gap-4 text-sm font-medium">
+                {isProductInStock(product) ? (
+                  <>
+                    <span className="flex items-center gap-1 text-green-600"><CheckCircle size={16} /> In Stock ({product.items_left || 0})</span>
+                    <span className="flex items-center gap-1 text-green-600"><ShieldCheck size={16} /> Official Warranty</span>
+                  </>
+                ) : product.inventory_status === INVENTORY_STATUS.OUT_OF_STOCK ? (
+                  <span className="flex items-center gap-1 text-red-600"><AlertCircle size={16} /> Out of Stock</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-500"><AlertCircle size={16} /> Unavailable</span>
+                )}
               </div>
             </div>
 
@@ -145,28 +154,32 @@ export default function ProductDetail() {
             <div className="flex flex-col gap-4 mb-8">
               <button 
                 onClick={handleBuyOnce}
-                className="w-full bg-zeal-dark hover:bg-black text-white font-black py-4 rounded-sm text-sm uppercase tracking-widest transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-3 transform hover:-translate-y-0.5"
+                disabled={!isProductInStock(product)}
+                className={`w-full ${isProductInStock(product) ? 'bg-zeal-dark hover:bg-black' : 'bg-gray-400 cursor-not-allowed'} text-white font-black py-4 rounded-sm text-sm uppercase tracking-widest transition-all shadow-md ${isProductInStock(product) ? 'hover:shadow-lg' : ''} flex items-center justify-center gap-3 ${isProductInStock(product) ? 'transform hover:-translate-y-0.5' : ''}`}
               >
-                <ShoppingBag size={18} /> Buy Once Now — {fmt(price)}
+                <ShoppingBag size={18} /> {isProductInStock(product) ? `Buy Once Now — ${fmt(price)}` : 'Out of Stock'}
               </button>
             </div>
 
             {/* Installment Payment Section */}
             <div className="bg-gray-50 border border-gray-200 rounded-sm overflow-hidden">
               <button
-                className="w-full px-6 py-4 flex justify-between items-center bg-white hover:bg-gray-50 transition-colors"
+                disabled={!isProductInStock(product)}
+                className={`w-full px-6 py-4 flex justify-between items-center ${isProductInStock(product) ? 'bg-white hover:bg-gray-50' : 'bg-gray-100 cursor-not-allowed'} transition-colors`}
                 onClick={() => setShowInstallment(v => !v)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <div className={`w-8 h-8 rounded-full ${isProductInStock(product) ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400'} flex items-center justify-center`}>
                     <i className="fas fa-calendar-alt text-sm"></i>
                   </div>
-                  <span className="font-black text-gray-900 uppercase tracking-wide">Pay in Installments</span>
+                  <span className={`font-black uppercase tracking-wide ${isProductInStock(product) ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {isProductInStock(product) ? 'Pay in Installments' : 'Pay in Installments (Unavailable)'}
+                  </span>
                 </div>
-                <ChevronDown size={20} className={`text-gray-400 transition-transform duration-300 ${showInstallment ? 'rotate-180' : ''}`} />
+                <ChevronDown size={20} className={`${isProductInStock(product) ? 'text-gray-400' : 'text-gray-300'} transition-transform duration-300 ${showInstallment ? 'rotate-180' : ''}`} />
               </button>
 
-              {showInstallment && (
+              {showInstallment && isProductInStock(product) && (
                 <div className="p-6 border-t border-gray-200">
                   
                   {/* Frequency Toggle */}
