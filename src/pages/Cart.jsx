@@ -138,86 +138,112 @@ export default function Cart() {
     setError('');
 
     try {
-      if (splitMode) {
-        const groups = buildGroupMap(expandedItems);
-        for (const [gId, groupUnits] of Object.entries(groups)) {
-          if (groupUnits.length === 0) continue;
-          const merged = {};
-          groupUnits.forEach(unit => {
-            if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
-            merged[unit.cartItemId].quantity += 1;
-          });
-          const groupItems = Object.values(merged);
-          const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
-          const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
-
-          // Decrement inventory for each item in the order
-          for (const item of groupItems) {
-            try {
-              await decreaseInventory(item.id, item.quantity);
-            } catch (inventoryErr) {
-              console.error('Error updating inventory for item:', item.id, inventoryErr);
-            }
-          }
-
-          const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
-            userId: user.uid,
-            items: groupItems,
-            deliveryInfo: deliveryInfo,
-            totalAmount: groupTotalAmount,
-            amountPaid: groupTotalToPayNow,
-            status: 'Processing',
-            paymentRef: `MOCK_REF_${Date.now()}_G${gId}`,
-            createdAt: new Date(),
-          }));
-
-          // Create notifications
-          try {
-            await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
-            await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
-          } catch (notifErr) {
-            console.error('Error creating notifications:', notifErr);
-          }
-        }
-      } else {
-        // Decrement inventory for each item in the order
-        for (const item of items) {
-          try {
-            await decreaseInventory(item.id, item.quantity);
-          } catch (inventoryErr) {
-            console.error('Error updating inventory for item:', item.id, inventoryErr);
-          }
-        }
-
-        const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
-        const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
-          userId: user.uid,
-          items: items,
-          deliveryInfo: deliveryInfo,
-          totalAmount: orderTotalAmount,
-          amountPaid: totalToPayNow,
-          status: 'Processing',
-          paymentRef: `MOCK_REF_${Date.now()}`,
-          createdAt: new Date(),
-        }));
-
-        // Create notifications
-        try {
-          await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
-          await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow);
-        } catch (notifErr) {
-          console.error('Error creating notifications:', notifErr);
-        }
+      const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
+      if (!koraKey || !window.Korapay) {
+        toast.error("Payment gateway is not configured properly.");
+        setLoading(false);
+        return;
       }
 
-      clearCart();
-      toast.success('Order placed successfully!');
-      setShowPreview(false);
-      navigate('/profile');
+      window.Korapay.initialize({
+        key: koraKey,
+        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: totalToPayNow,
+        currency: "NGN",
+        customer: {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email
+        },
+        onSuccess: async function(response) {
+            toast.success("Payment verified! Processing order...");
+            try {
+              if (splitMode) {
+                const groups = buildGroupMap(expandedItems);
+                for (const [gId, groupUnits] of Object.entries(groups)) {
+                  if (groupUnits.length === 0) continue;
+                  const merged = {};
+                  groupUnits.forEach(unit => {
+                    if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
+                    merged[unit.cartItemId].quantity += 1;
+                  });
+                  const groupItems = Object.values(merged);
+                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
+
+                  for (const item of groupItems) {
+                    try {
+                      await decreaseInventory(item.id, Number(item.quantity));
+                    } catch (inventoryErr) {
+                      console.error('Error updating inventory for item:', item.id, inventoryErr);
+                    }
+                  }
+
+                  const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
+                    userId: user.uid,
+                    items: groupItems,
+                    deliveryInfo: deliveryInfo,
+                    totalAmount: groupTotalAmount,
+                    amountPaid: groupTotalToPayNow,
+                    status: 'Processing',
+                    paymentRef: response.reference || `REF_${Date.now()}_G${gId}`,
+                    createdAt: new Date(),
+                  }));
+
+                  try {
+                    await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
+                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
+                  } catch (notifErr) {
+                    console.error('Error creating notifications:', notifErr);
+                  }
+                }
+              } else {
+                for (const item of items) {
+                  try {
+                    await decreaseInventory(item.id, Number(item.quantity));
+                  } catch (inventoryErr) {
+                    console.error('Error updating inventory for item:', item.id, inventoryErr);
+                  }
+                }
+
+                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
+                  userId: user.uid,
+                  items: items,
+                  deliveryInfo: deliveryInfo,
+                  totalAmount: orderTotalAmount,
+                  amountPaid: totalToPayNow,
+                  status: 'Processing',
+                  paymentRef: response.reference || `REF_${Date.now()}`,
+                  createdAt: new Date(),
+                }));
+
+                try {
+                  await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
+                  await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow);
+                } catch (notifErr) {
+                  console.error('Error creating notifications:', notifErr);
+                }
+              }
+
+              clearCart();
+              toast.success('Order placed successfully!');
+              setShowPreview(false);
+              setLoading(false);
+              navigate('/profile');
+            } catch (err) {
+              console.error("Error saving order:", err);
+              setError("Payment successful but failed to save order. Please contact support.");
+              setLoading(false);
+            }
+        },
+        onClose: function() {
+            setLoading(false);
+            toast.error("Payment was cancelled.");
+        }
+      });
     } catch (err) {
-      console.error("Error saving order:", err);
-      setError("Payment successful but failed to save order. Please contact support.");
-    } finally {
+      console.error("Error initializing payment:", err);
+      setError("Failed to initialize payment gateway.");
       setLoading(false);
     }
   };
