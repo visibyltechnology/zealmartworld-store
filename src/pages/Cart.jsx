@@ -127,6 +127,22 @@ export default function Cart() {
 
   const totalToPayNow = getInitialPaymentTotal();
 
+  const loadKorapayScript = () => new Promise((resolve, reject) => {
+    if (window.Korapay) { resolve(); return; }
+    const existing = document.querySelector('script[data-korapay]');
+    if (existing) {
+      existing.addEventListener('load', resolve);
+      existing.addEventListener('error', reject);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://korablobstorage.blob.core.windows.net/modal/korapay.js';
+    s.setAttribute('data-korapay', 'true');
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
   const handleCheckout = async () => {
     if (!user) {
       navigate('/login');
@@ -139,8 +155,23 @@ export default function Cart() {
 
     try {
       const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
-      if (!koraKey || !window.Korapay) {
-        toast.error("Payment gateway is not configured properly.");
+      if (!koraKey) {
+        toast.error('Payment key is missing. Please contact support.');
+        setLoading(false);
+        return;
+      }
+
+      // Ensure Korapay script is loaded (handles race-condition on first load)
+      try {
+        await loadKorapayScript();
+      } catch {
+        toast.error('Could not load payment gateway. Check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (!window.Korapay) {
+        toast.error('Payment gateway failed to initialise. Please refresh and try again.');
         setLoading(false);
         return;
       }
@@ -580,9 +611,9 @@ export default function Cart() {
                       {items.map(item => (
                         <div key={item.cartItemId} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
                           <div className="flex items-center gap-3 min-w-0 pr-4">
-                            <span className="font-black text-sm text-gray-400">{item.quantity}×</span>
+                            <span className="font-black text-sm text-gray-400 flex-shrink-0">{item.quantity}×</span>
                             <span className="font-bold text-sm text-gray-800 truncate">{item.name}</span>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded-sm">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded-sm flex-shrink-0 whitespace-nowrap">
                               {item.paymentChoice === 'full' ? 'Full' : `${item.installments} ${item.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}`}
                             </span>
                           </div>
