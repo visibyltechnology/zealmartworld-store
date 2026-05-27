@@ -129,17 +129,19 @@ export default function Cart() {
 
   const loadKorapayScript = () => new Promise((resolve, reject) => {
     if (window.Korapay) { resolve(); return; }
+
+    // Remove any previously-failed script tag so we can inject a fresh one
     const existing = document.querySelector('script[data-korapay]');
-    if (existing) {
-      existing.addEventListener('load', resolve);
-      existing.addEventListener('error', reject);
-      return;
-    }
+    if (existing) existing.remove();
+
     const s = document.createElement('script');
     s.src = 'https://korablobstorage.blob.core.windows.net/modal/korapay.js';
     s.setAttribute('data-korapay', 'true');
-    s.onload = resolve;
-    s.onerror = reject;
+    s.onload = () => resolve();
+    s.onerror = () => {
+      s.remove(); // clean up so the next attempt starts fresh too
+      reject(new Error('Korapay script failed to load'));
+    };
     document.head.appendChild(s);
   });
 
