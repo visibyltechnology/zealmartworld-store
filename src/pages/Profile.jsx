@@ -57,10 +57,11 @@ export default function Profile() {
         ordersData.sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis());
         setOrders(ordersData);
       } catch (err) {
+        console.error("Profile load error:", err);
         if (err.message && err.message.toLowerCase().includes('offline')) {
           setError('Please check your internet connection and try again.');
         } else {
-          setError('We encountered an issue loading your profile. Please try again later.');
+          setError(`We encountered an issue loading your profile: ${err.message}`);
         }
       } finally {
         setLoading(false);

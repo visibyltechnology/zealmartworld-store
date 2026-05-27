@@ -60,7 +60,7 @@ export default function Register() {
         createdAt: new Date()
       });
 
-      if (formData.email === 'zealmart.ng@gmail.com') {
+      if (formData.email === 'mayjayconcepts@gmail.com') {
         navigate('/admin');
       } else {
         try {
@@ -82,6 +82,7 @@ export default function Register() {
         navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
       }
     } catch (err) {
+      console.error("Registration error full details:", err);
       if (err.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please login instead.');
         toast.error('This email is already registered.');
@@ -92,8 +93,8 @@ export default function Register() {
         setError('Please check your internet connection and try again.');
         toast.error('Check your internet connection.');
       } else {
-        setError('Failed to register. Please try again later.');
-        toast.error('Failed to register. Please try again.');
+        setError(`Failed to register: ${err.message}`);
+        toast.error(`Error: ${err.message}`);
       }
     } finally {
       setLoading(false);

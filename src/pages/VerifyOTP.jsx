@@ -183,8 +183,8 @@ export default function VerifyOTP() {
       });
 
       await emailjs.send(
-        'service_mcu3hnj',
-        'template_643qpnq',
+        'service_4qwypyf',
+        'template_o17qzmm',
         {
           email: email,
           name: userData.firstName || 'Customer',

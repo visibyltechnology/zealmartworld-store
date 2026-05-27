@@ -119,7 +119,7 @@ export default function Login() {
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
                       Password
                     </label>
-                    <a href="#" className="text-xs text-zeal-blue font-bold hover:text-zeal-red transition-colors">Forgot Password?</a>
+                    <Link to="/forgot-password" className="text-xs text-zeal-blue font-bold hover:text-zeal-red transition-colors">Forgot Password?</Link>
                   </div>
                   <div className="relative">
                     <i className="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>

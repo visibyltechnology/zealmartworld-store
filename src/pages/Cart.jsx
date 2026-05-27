@@ -353,7 +353,10 @@ export default function Cart() {
                   <input type="text" placeholder="City" value={deliveryInfo.city} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, city: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
                   <input type="text" placeholder="State" value={deliveryInfo.state} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, state: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
                 </div>
-                <input type="tel" placeholder="Phone Number" value={deliveryInfo.phone} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                <div>
+                  <input type="tel" placeholder="WhatsApp Number (e.g. +234...)" value={deliveryInfo.phone} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                  <span className="text-[10px] font-bold text-gray-500 mt-1 block uppercase tracking-wider">Required for WhatsApp delivery updates. Please include country code (+234).</span>
+                </div>
                 <textarea placeholder="Additional Instructions (Optional)" value={deliveryInfo.instructions} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors resize-y min-h-[80px]"></textarea>
               </div>
 

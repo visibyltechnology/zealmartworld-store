@@ -153,7 +153,7 @@ export default function ProductDetail() {
             <div className="border-t border-gray-100 pt-6 mb-8">
               <div className="flex items-end gap-4 mb-2">
                 <span className="text-4xl font-display font-black text-zeal-red">{fmt(price)}</span>
-                {product.oldPrice && (
+                {Number(product.oldPrice) > 0 && (
                   <span className="text-lg text-gray-400 line-through font-medium mb-1">{fmt(product.oldPrice)}</span>
                 )}
               </div>

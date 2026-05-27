@@ -36,6 +36,7 @@ export default function ProductForm() {
     length: '18"',
     price: '',
     pss: '',
+    tag: '',
     featured: false,
     featuredPosition: '',
     img: '',
@@ -142,6 +143,7 @@ export default function ProductForm() {
         ...formData,
         price: Number(formData.price),
         pss: Number(formData.pss || 0),
+        tag: formData.tag || '',
         img: imageUrl,
         featured: formData.featured,
         featuredPosition: formData.featured ? Number(positionInput) || 0 : '',
@@ -286,8 +288,8 @@ export default function ProductForm() {
               />
             </FieldGroup>
 
-            {/* Category + Length */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* Category + Length + Tag */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
               <FieldGroup label="Category" icon={<Tag size={14} />} accent={catColor.text}>
                 <div style={{ position: 'relative' }}>
                   <select
@@ -309,7 +311,7 @@ export default function ProductForm() {
                 </div>
               </FieldGroup>
 
-              <FieldGroup label='Model/Specifications' icon={<Ruler size={14} />} accent="#059669">
+              <FieldGroup label='Model/Specs' icon={<Ruler size={14} />} accent="#059669">
                 <input
                   type="text" name="length" value={formData.length}
                   onChange={handleChange} required placeholder='e.g. 18"'
@@ -317,6 +319,32 @@ export default function ProductForm() {
                   onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
                   onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
                 />
+              </FieldGroup>
+
+              <FieldGroup label="Product Tag" icon={<Sparkles size={14} />} accent="#ec4899">
+                <div style={{ position: 'relative' }}>
+                  <select
+                    name="tag" value={formData.tag || ''} onChange={handleChange}
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: 16, cursor: 'pointer',
+                      appearance: 'none'
+                    }}
+                    onFocus={e => { e.target.style.borderColor = '#ec4899'; e.target.style.boxShadow = '0 0 0 3px rgba(236,72,153,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  >
+                    <option value="">None</option>
+                    <option value="Top Seller">Top Seller</option>
+                    <option value="Official Warranty">Official Warranty</option>
+                    <option value="Fast Moving">Fast Moving</option>
+                    <option value="Best Deal">Best Deal</option>
+                    <option value="Premium">Premium</option>
+                    <option value="Budget Pick">Budget Pick</option>
+                    <option value="Hot Sale">Hot Sale</option>
+                    <option value="Clearance">Clearance</option>
+                  </select>
+                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
+                </div>
               </FieldGroup>
             </div>
 

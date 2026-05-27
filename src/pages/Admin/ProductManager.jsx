@@ -413,14 +413,18 @@ export default function ProductManager() {
      }
    };
 
-   // Filter & sort
   const filtered = products
     .filter(p => {
       const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase());
-      const matchCat = filterCat === 'All' || p.category === filterCat;
+      const matchCat = filterCat === 'All' ? true : (filterCat === 'Featured' ? p.featured : p.category === filterCat);
       return matchSearch && matchCat;
     })
     .sort((a, b) => {
+      if (filterCat === 'Featured') {
+        const posA = a.featuredPosition ?? Infinity;
+        const posB = b.featuredPosition ?? Infinity;
+        return posA - posB;
+      }
       if (sortBy === 'price-asc') return Number(a.price) - Number(b.price);
       if (sortBy === 'price-desc') return Number(b.price) - Number(a.price);
       if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
@@ -519,7 +523,7 @@ export default function ProductManager() {
         {/* Category filter */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <SlidersHorizontal size={15} style={{ color: '#9ca3af', alignSelf: 'center' }} />
-          {['All', ...Object.keys(CATEGORY_STYLES)].map(cat => {
+          {['All', 'Featured', ...Object.keys(CATEGORY_STYLES)].map(cat => {
             const s = cat === 'All' ? null : CATEGORY_STYLES[cat];
             const active = filterCat === cat;
             return (

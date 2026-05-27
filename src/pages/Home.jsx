@@ -109,6 +109,11 @@ export default function Home() {
                 let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 
                 if (items.length > 0) {
+                    items.sort((a, b) => {
+                        const posA = a.featuredPosition ?? Infinity;
+                        const posB = b.featuredPosition ?? Infinity;
+                        return posA - posB;
+                    });
                     setFeatured(items);
                 }
             } catch (error) {
@@ -304,11 +309,18 @@ export default function Home() {
                                 className="product-card-container relative group cursor-pointer flex flex-col h-full rounded bg-white overflow-hidden animate-fade-in-up"
                                 style={{animationDelay: `${idx * 100}ms`}}
                             >
-                                {p.tag && (
-                                    <div className="absolute top-2 left-2 z-10 bg-zeal-red text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider animate-pulse">
-                                        {p.tag}
-                                    </div>
-                                )}
+                                <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
+                                    {p.featured && (
+                                        <span className="bg-yellow-500 text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                            <i className="fas fa-star text-[8px]"></i> Featured
+                                        </span>
+                                    )}
+                                    {p.tag && (
+                                        <span className="bg-zeal-red text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider animate-pulse shadow-sm">
+                                            {p.tag}
+                                        </span>
+                                    )}
+                                </div>
                                 
                                 <div className="relative p-4 h-56 flex items-center justify-center border-b border-gray-100 bg-white overflow-hidden">
                                     <img src={p.img} alt={p.name} className="max-w-full max-h-full object-contain transform group-hover:scale-110 transition-transform duration-500" />
@@ -327,7 +339,7 @@ export default function Home() {
                                             <span className="text-xl font-display font-black text-zeal-red block">
                                                 ₦{Number(p.price).toLocaleString()}
                                             </span>
-                                            {p.oldPrice && (
+                                            {Number(p.oldPrice) > 0 && (
                                                 <span className="text-xs text-gray-400 line-through font-medium">
                                                     ₦{Number(p.oldPrice).toLocaleString()}
                                                 </span>

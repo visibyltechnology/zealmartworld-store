@@ -191,11 +191,18 @@ export default function Shop() {
                                     onClick={() => navigate(`/products/${p.id}`)}
                                     className="product-card-container relative group cursor-pointer flex flex-col h-full bg-white border border-gray-200"
                                 >
-                                    {p.tag && (
-                                        <div className="absolute top-2 left-2 z-10 bg-zeal-red text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider">
-                                            {p.tag}
-                                        </div>
-                                    )}
+                                    <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
+                                        {p.featured && (
+                                            <span className="bg-yellow-500 text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                                <i className="fas fa-star text-[8px]"></i> Featured
+                                            </span>
+                                        )}
+                                        {p.tag && (
+                                            <span className="bg-zeal-red text-white text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider shadow-sm">
+                                                {p.tag}
+                                            </span>
+                                        )}
+                                    </div>
                                     
                                     <div className="relative p-4 h-52 flex items-center justify-center bg-white border-b border-gray-100">
                                         <img src={p.img} alt={p.name} className="max-w-full max-h-full object-contain transform group-hover:scale-105 transition-transform duration-500" />
@@ -227,7 +234,7 @@ export default function Shop() {
                                                 <span className="text-xl font-display font-black text-zeal-red block">
                                                     ₦{Number(p.price).toLocaleString()}
                                                 </span>
-                                                {p.oldPrice && (
+                                                {Number(p.oldPrice) > 0 && (
                                                     <span className="text-xs text-gray-400 line-through font-medium">
                                                         ₦{Number(p.oldPrice).toLocaleString()}
                                                     </span>
