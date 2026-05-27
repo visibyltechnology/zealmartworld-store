@@ -105,11 +105,18 @@ export default function ProductDetail() {
     <main className="min-h-screen flex flex-col bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-grow">
         
-        {/* Breadcrumb / Back */}
-        <div className="mb-6">
-          <Link to="/products" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-zeal-red uppercase tracking-wider transition-colors">
-            <ArrowLeft size={16} /> Back to Products
+        <div className="mb-6 flex items-center text-sm font-bold text-gray-500 uppercase tracking-wider">
+          <Link to="/" className="hover:text-zeal-red transition-colors flex items-center gap-1">
+             Home
           </Link>
+          <span className="mx-2 text-gray-300">/</span>
+          <Link to={`/products?cat=${product.category}`} className="hover:text-zeal-red transition-colors">
+             {product.category}
+          </Link>
+          <span className="mx-2 text-gray-300">/</span>
+          <span className="text-gray-800 line-clamp-1 max-w-[200px] sm:max-w-md" title={product.name}>
+             {product.name}
+          </span>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
@@ -129,7 +136,9 @@ export default function ProductDetail() {
           {/* Info Column */}
           <div className="w-full lg:w-1/2 py-2">
             <div className="mb-6">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{product.brand || product.category}</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                Brand: <span className="text-zeal-blue">{product.brand || 'OFFICIAL PARTNER'}</span>
+              </p>
               <h1 className="text-3xl md:text-4xl font-display font-black text-gray-900 leading-tight mb-4">{product.name}</h1>
               {product.length && (
                 <span className="inline-block bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-sm uppercase tracking-wider mb-4">
@@ -151,14 +160,48 @@ export default function ProductDetail() {
             </div>
 
             <div className="border-t border-gray-100 pt-6 mb-8">
-              <div className="flex items-end gap-4 mb-2">
+              <div className="flex items-center gap-4 mb-2">
                 <span className="text-4xl font-display font-black text-zeal-red">{fmt(price)}</span>
-                {Number(product.oldPrice) > 0 && (
-                  <span className="text-lg text-gray-400 line-through font-medium mb-1">{fmt(product.oldPrice)}</span>
+                {Number(product.oldPrice) > price && (
+                  <div className="flex flex-col">
+                    <span className="text-sm text-gray-400 line-through font-medium">Original price was: {fmt(product.oldPrice)}</span>
+                  </div>
                 )}
               </div>
-              <p className="text-sm text-gray-500 font-medium">Delivery is processed after full payment is completed.</p>
+              {Number(product.oldPrice) > price && (
+                <div className="inline-block bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-sm uppercase tracking-widest mb-2">
+                  {Math.round(100 - (price / Number(product.oldPrice)) * 100)}% OFF
+                </div>
+              )}
+              <p className="text-sm text-gray-500 font-medium mt-1">Delivery is processed after full payment is completed.</p>
             </div>
+
+            {/* Product Description / Features */}
+            {product.description && (
+              <div className="bg-gray-50 border border-gray-100 rounded-sm p-6 mb-8">
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Key Features & Specifications</h3>
+                <ul className="space-y-3">
+                  {product.description.split('\n').filter(line => line.trim() !== '').map((line, idx) => {
+                    const [key, ...rest] = line.split(':');
+                    const value = rest.join(':').trim();
+                    return (
+                      <li key={idx} className="flex flex-col sm:flex-row sm:items-start text-sm">
+                        {value ? (
+                          <>
+                            <span className="font-bold text-gray-700 w-full sm:w-1/3 shrink-0">{key.trim()}:</span>
+                            <span className="text-gray-600 flex-1">{value}</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-600 flex-1">
+                            <i className="fas fa-check text-zeal-blue mr-2 text-xs"></i>{line.trim()}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-4 mb-8">

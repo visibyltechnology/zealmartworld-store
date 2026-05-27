@@ -26,6 +26,7 @@ export default function Shop() {
 
     const [active, setActive] = useState(initial);
     const [search, setSearch] = useState(searchParams.get('search') || '');
+    const [currentPage, setCurrentPage] = useState(1);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -85,11 +86,21 @@ export default function Shop() {
         }
     }, [location.search, location.pathname, searchParams]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, active]);
+
     const filtered = products.filter(p => {
         const matchCat = active === 'All' || p.category === active;
         const matchSearch = (p.name || '').toLowerCase().includes(search.toLowerCase());
         return matchCat && matchSearch;
     });
+
+    const itemsPerPage = 120;
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
     return (
         <main className="bg-gray-50 flex-grow min-h-screen">
@@ -185,7 +196,7 @@ export default function Shop() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filtered.map(p => (
+                            {currentItems.map(p => (
                                 <div 
                                     key={p.id} 
                                     onClick={() => navigate(`/products/${p.id}`)}
@@ -252,6 +263,28 @@ export default function Shop() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    
+                    {!loading && totalPages > 1 && (
+                        <div className="flex justify-center items-center gap-4 mt-10 mb-4">
+                            <button 
+                                disabled={currentPage === 1}
+                                onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                className="px-5 py-2.5 bg-white border-2 border-gray-200 hover:border-zeal-blue text-gray-600 hover:text-zeal-blue rounded-sm text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <i className="fas fa-chevron-left mr-2"></i> Prev
+                            </button>
+                            <span className="text-sm text-gray-500 font-bold uppercase tracking-wider">
+                                Page <span className="text-gray-900">{currentPage}</span> of {totalPages}
+                            </span>
+                            <button 
+                                disabled={currentPage === totalPages}
+                                onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                className="px-5 py-2.5 bg-white border-2 border-gray-200 hover:border-zeal-blue text-gray-600 hover:text-zeal-blue rounded-sm text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next <i className="fas fa-chevron-right ml-2"></i>
+                            </button>
                         </div>
                     )}
                 </div>

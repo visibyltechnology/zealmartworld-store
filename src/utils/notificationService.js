@@ -30,11 +30,13 @@ export const NOTIFICATION_TYPES = {
  * Order Status Mapping for Stepper
  */
 export const ORDER_STATUS_STEPS = {
-  pending_payment: { step: 1, label: 'Order Placed', accent: 'gray' },
-  payment_received: { step: 2, label: 'Payment Confirmed', accent: 'green' },
-  dispatched: { step: 3, label: 'Package Shipped', accent: 'blue' },
-  out_for_delivery: { step: 4, label: 'Near You', accent: 'amber' },
-  completed: { step: 5, label: 'Delivered', accent: 'green' }
+  Pending: { step: 1, label: 'Order Placed', accent: 'gray' },
+  Paid: { step: 2, label: 'Payment Confirmed', accent: 'green' },
+  Processing: { step: 3, label: 'Processing', accent: 'blue' },
+  Shipped: { step: 4, label: 'Package Shipped', accent: 'blue' },
+  Delivered: { step: 5, label: 'Delivered', accent: 'green' },
+  Cancelled: { step: 6, label: 'Cancelled', accent: 'red' },
+  Returned: { step: 7, label: 'Returned', accent: 'red' }
 };
 
 /**

@@ -34,6 +34,8 @@ export default function ProductForm() {
     name: '',
     category: 'Air Conditioners',
     length: '18"',
+    brand: '',
+    description: '',
     price: '',
     pss: '',
     tag: '',
@@ -143,6 +145,8 @@ export default function ProductForm() {
         ...formData,
         price: Number(formData.price),
         pss: Number(formData.pss || 0),
+        brand: formData.brand || '',
+        description: formData.description || '',
         tag: formData.tag || '',
         img: imageUrl,
         featured: formData.featured,
@@ -345,6 +349,28 @@ export default function ProductForm() {
                   </select>
                   <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
                 </div>
+              </FieldGroup>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+              <FieldGroup label="Brand" icon={<Tag size={14} />} accent="#10b981">
+                <input
+                  type="text" name="brand" value={formData.brand || ''}
+                  onChange={handleChange} placeholder="e.g. Samsung, LG, Hisense..."
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
+              </FieldGroup>
+
+              <FieldGroup label="Product Description / Features" icon={<Sparkles size={14} />} accent="#8b5cf6">
+                <textarea
+                  name="description" value={formData.description || ''}
+                  onChange={handleChange} placeholder="Enter features separated by lines (e.g. Screen Size: 65 Inches)"
+                  style={{...inputStyle, minHeight: '120px', resize: 'vertical'}}
+                  onFocus={e => { e.target.style.borderColor = '#8b5cf6'; e.target.style.boxShadow = '0 0 0 3px rgba(139,92,246,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
               </FieldGroup>
             </div>
 
