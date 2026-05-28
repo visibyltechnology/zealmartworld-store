@@ -37,21 +37,35 @@ export default function AdminLayout() {
         </button>
       </div>
 
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+        ></div>
+      )}
+
       {/* Sidebar */}
       <aside className={`
-        fixed md:sticky top-0 left-0 h-screen md:h-auto z-10 w-64 bg-zeal-dark border-r border-gray-800 shadow-xl md:shadow-none
+        fixed md:sticky top-0 left-0 h-screen md:h-auto z-50 w-64 bg-zeal-dark border-r border-gray-800 shadow-2xl md:shadow-none
         transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out
         flex flex-col
       `}>
-        <div className="p-6 hidden md:block border-b border-gray-800">
-          <h2 className="font-display font-black text-2xl uppercase tracking-widest text-white mb-1">
-            Admin <span className="text-zeal-red">Panel</span>
-          </h2>
-          <p className="text-xs font-medium text-gray-400 break-all">{user.email}</p>
-        </div>
-
-        <div className="md:hidden p-6 border-b border-gray-800 mt-16">
-           <p className="text-xs font-medium text-gray-400 break-all">{user.email}</p>
+        {/* Header inside sidebar (visible on both mobile and desktop) */}
+        <div className="p-6 flex justify-between items-start border-b border-gray-800 flex-shrink-0">
+          <div>
+            <h2 className="font-display font-black text-2xl uppercase tracking-widest text-white mb-1">
+              Admin <span className="text-zeal-red">Panel</span>
+            </h2>
+            <p className="text-xs font-medium text-gray-400 break-all">{user.email}</p>
+          </div>
+          {/* Close button inside sidebar on mobile */}
+          <button 
+            onClick={() => setMobileMenuOpen(false)} 
+            className="md:hidden text-gray-400 hover:text-white p-1"
+          >
+            <X size={24} />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-6 flex flex-col gap-2 overflow-y-auto">
@@ -73,7 +87,7 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-gray-800 flex-shrink-0">
           <button
             onClick={async () => {
               await signOut(auth);
@@ -85,14 +99,6 @@ export default function AdminLayout() {
           </button>
         </div>
       </aside>
-
-      {/* Overlay for mobile menu */}
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-0 md:hidden backdrop-blur-sm"
-          onClick={() => setMobileMenuOpen(false)}
-        ></div>
-      )}
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-full md:max-w-[calc(100vw-16rem)] p-4 md:p-8 overflow-y-auto">
