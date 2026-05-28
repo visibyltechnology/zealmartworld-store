@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import Footer from '../components/Footer';
@@ -36,6 +36,11 @@ export default function Profile() {
   const [statusFilter, setStatusFilter] = useState('All Orders');
   const [sortBy, setSortBy] = useState('Date (Newest First)');
   const [expandedOrders, setExpandedOrders] = useState(new Set());
+
+  // Phone Verification State
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -111,6 +116,64 @@ export default function Profile() {
       toast.error("Payment successful but failed to update order record.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async () => {
+    if (!profileData?.phone) return;
+    setVerifyingPhone(true);
+    try {
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      
+      await updateDoc(doc(db, 'users', user.uid), {
+        phoneOtpCode: otpCode,
+        phoneOtpExpiresAt: otpExpiresAt
+      });
+
+      await addDoc(collection(db, 'otp_requests'), {
+        phone: profileData.phone,
+        otpCode: otpCode,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      
+      toast.success('Verification code sent to your WhatsApp!');
+      setShowPhoneVerify(true);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to send verification code');
+    } finally {
+      setVerifyingPhone(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (!phoneOtp) return;
+    setVerifyingPhone(true);
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.data();
+      
+      if (data.phoneOtpCode === phoneOtp && new Date() < data.phoneOtpExpiresAt.toDate()) {
+        await updateDoc(docRef, {
+          isPhoneVerified: true,
+          phoneOtpCode: null,
+          phoneOtpExpiresAt: null
+        });
+        setProfileData(prev => ({ ...prev, isPhoneVerified: true }));
+        setShowPhoneVerify(false);
+        setPhoneOtp('');
+        toast.success('Phone number verified successfully!');
+      } else {
+        toast.error('Invalid or expired OTP');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Verification failed');
+    } finally {
+      setVerifyingPhone(false);
     }
   };
 
@@ -211,7 +274,7 @@ export default function Profile() {
                   {[
                     { label: 'Full Name', value: `${profileData.firstName || 'Admin'} ${profileData.lastName || ''}`, icon: 'fa-user' },
                     { label: 'Email Address', value: profileData.email || user.email, icon: 'fa-envelope' },
-                    { label: 'Phone Number', value: profileData.phone || 'Not provided', icon: 'fa-phone' },
+                    { label: 'Phone Number', value: profileData.phone || 'Not provided', icon: 'fa-phone', isPhone: true, verified: profileData.isPhoneVerified },
                     !isAdmin ? { label: 'Account Status', value: profileData.isEmailVerified ? 'Verified' : 'Unverified', icon: 'fa-shield-alt', special: !profileData.isEmailVerified } : null,
                   ].filter(Boolean).map(field => (
                     <div key={field.label} className="flex flex-col">
@@ -219,8 +282,19 @@ export default function Profile() {
                         <i className={`fas ${field.icon}`}></i> {field.label}
                       </div>
                       <div className={`font-bold text-sm ${field.special ? 'text-amber-500' : 'text-gray-800'}`}>
-                        {field.value} {field.special === false && <i className="fas fa-check-circle text-green-500 ml-1"></i>}
+                        {field.value} 
+                        {field.special === false && <i className="fas fa-check-circle text-green-500 ml-1"></i>}
+                        {field.isPhone && field.verified && <i className="fas fa-check-circle text-green-500 ml-2" title="Verified Phone"></i>}
                       </div>
+                      {field.isPhone && !field.verified && profileData.phone && (
+                        <button 
+                          onClick={handleSendPhoneOtp}
+                          disabled={verifyingPhone}
+                          className="mt-2 w-max bg-zeal-dark text-white text-[10px] uppercase font-bold px-3 py-1.5 rounded-sm hover:bg-black transition-colors disabled:opacity-50"
+                        >
+                          {verifyingPhone ? 'Sending...' : 'Verify Phone via WhatsApp'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -577,6 +651,43 @@ export default function Profile() {
         </div>
       </div>
       <Footer />
+
+      {/* Phone OTP Verification Modal */}
+      {showPhoneVerify && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-sm w-full max-w-sm p-6 shadow-2xl relative overflow-hidden">
+            <h3 className="text-lg font-black text-gray-900 mb-2">Verify Phone Number</h3>
+            <p className="text-sm text-gray-500 font-medium mb-6">Enter the 6-digit OTP sent to your WhatsApp number.</p>
+            
+            <div className="mb-6">
+              <input 
+                type="text" 
+                value={phoneOtp}
+                onChange={(e) => setPhoneOtp(e.target.value)}
+                placeholder="123456"
+                maxLength="6"
+                className="w-full border border-gray-300 rounded-sm px-4 py-3 text-center text-xl font-bold tracking-widest focus:border-zeal-blue outline-none"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowPhoneVerify(false)}
+                className="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-sm hover:bg-gray-50 transition-colors uppercase text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleVerifyPhoneOtp}
+                disabled={verifyingPhone || phoneOtp.length !== 6}
+                className="flex-1 bg-zeal-red text-white font-bold py-2.5 rounded-sm hover:bg-red-800 transition-colors uppercase text-xs disabled:opacity-50"
+              >
+                {verifyingPhone ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

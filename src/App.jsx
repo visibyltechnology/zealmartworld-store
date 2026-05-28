@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Navbar from './components/Navbar';
 import useAuthStore from './store/useAuthStore';
 import { Toaster } from 'react-hot-toast';
+import ScrollToTop from './components/ScrollToTop';
 import './index.css';
 
 // Lazy load pages for performance
@@ -17,6 +18,8 @@ const Profile       = lazy(() => import('./pages/Profile'));
 const Cart          = lazy(() => import('./pages/Cart'));
 const DeliveryPortal = lazy(() => import('./pages/DeliveryPortal'));
 const Notifications  = lazy(() => import('./pages/Notifications'));
+const Terms          = lazy(() => import('./pages/Terms'));
+const PrivacyPolicy  = lazy(() => import('./pages/PrivacyPolicy'));
 
 // Admin pages
 const AdminLayout      = lazy(() => import('./pages/Admin/AdminLayout'));
@@ -69,6 +72,7 @@ function App() {
 
   return (
     <Router>
+      <ScrollToTop />
       <Navbar />
       <Toaster
         position="top-center"
@@ -106,6 +110,8 @@ function App() {
           <Route path="/notifications"  element={user ? <Notifications /> : <Navigate to="/login" />} />
           <Route path="/cart"           element={<Cart />} />
           <Route path="/delivery"       element={<DeliveryPortal />} />
+          <Route path="/terms"          element={<Terms />} />
+          <Route path="/privacy"        element={<PrivacyPolicy />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLayout />}>

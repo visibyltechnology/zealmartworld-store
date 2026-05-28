@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
+import LegalModal from '../components/LegalModal';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -23,9 +24,16 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [activeLegal, setActiveLegal] = useState(null); // 'terms' | 'privacy' | null
 
   const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    let value = e.target.value;
+    if (e.target.name === 'phone') {
+      value = value.replace(/\D/g, ''); // only allow digits
+    }
+    setFormData(prev => ({ ...prev, [e.target.name]: value }));
   };
 
   const handleRegister = async (e) => {
@@ -38,6 +46,23 @@ export default function Register() {
       toast.error('Passwords do not match');
       return;
     }
+
+    if (!agreedToTerms || !agreedToPrivacy) {
+      setError('You must read and accept both the Terms & Conditions and Privacy Policy to continue.');
+      toast.error('Please accept both legal documents to proceed.');
+      return;
+    }
+
+    let formattedPhone = formData.phone;
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
+    if (formattedPhone.length !== 10) {
+      setError('Please enter a valid 10-digit phone number (e.g. 8012345678).');
+      toast.error('Invalid phone number length.');
+      return;
+    }
+    const finalPhone = '+234' + formattedPhone;
 
     setLoading(true);
     try {
@@ -52,9 +77,10 @@ export default function Register() {
       await setDoc(doc(db, "users", user.uid), {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phone: formData.phone,
+        phone: finalPhone,
         email: formData.email,
         isEmailVerified: false,
+        isPhoneVerified: false,
         otpCode: otpCode,
         otpExpiresAt: otpExpiresAt,
         createdAt: new Date()
@@ -64,19 +90,35 @@ export default function Register() {
         navigate('/admin');
       } else {
         try {
-          await emailjs.send(
+          // Send OTP via WhatsApp
+          await addDoc(collection(db, 'otp_requests'), {
+            phone: finalPhone,
+            otpCode: otpCode,
+            status: 'pending',
+            createdAt: serverTimestamp()
+          });
+        } catch (waErr) {
+          console.error("WhatsApp OTP error:", waErr);
+        }
+
+        try {
+          const emailResult = await emailjs.send(
             'service_4qwypyf',
             'template_o17qzmm',
             {
+              to_email: formData.email,   // explicit recipient field
               email: formData.email,
               name: formData.firstName,
               otp: otpCode,
               code: otpCode
             },
-            'A7Sq--0D6K2sijujF'
+            'CWdxDP7npAJ5fJzA1'
           );
+          console.log('EmailJS success:', emailResult.status, emailResult.text);
         } catch (emailErr) {
           console.error("EmailJS error:", emailErr);
+          // Show the actual error so you can diagnose
+          toast.error(`Email OTP failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`, { duration: 6000 });
         }
 
         navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
@@ -177,12 +219,14 @@ export default function Register() {
                   {/* Phone */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Phone Number</label>
-                    <div className="relative">
-                      <i className="fas fa-phone absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                    <div className="flex relative">
+                      <span className="inline-flex items-center px-4 rounded-l-sm border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-sm font-bold">
+                        +234
+                      </span>
                       <input
                         type="tel" name="phone" value={formData.phone}
-                        placeholder="+234 800 000 0000" required onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 focus:border-zeal-blue outline-none text-sm font-medium transition-colors rounded-sm bg-gray-50 focus:bg-white"
+                        placeholder="800 000 0000" required onChange={handleChange} maxLength="11"
+                        className="w-full pl-3 pr-4 py-3 border border-gray-300 focus:border-zeal-blue outline-none text-sm font-medium transition-colors rounded-r-sm bg-gray-50 focus:bg-white"
                       />
                     </div>
                   </div>
@@ -244,10 +288,87 @@ export default function Register() {
                     )}
                   </div>
 
-                  {/* Terms note */}
-                  <p className="text-xs text-gray-500 font-medium">
-                    By registering, you agree to our <a href="#" className="text-zeal-blue hover:underline">Terms of Service</a> and <a href="#" className="text-zeal-blue hover:underline">Privacy Policy</a>.
-                  </p>
+                  {/* Legal Agreement — Modal-based */}
+                  <div className="space-y-3">
+                    {/* Terms checkbox */}
+                    <div
+                      onClick={() => !agreedToTerms && setActiveLegal('terms')}
+                      className={`flex items-start gap-3 border rounded-sm p-4 transition-all cursor-pointer ${
+                        agreedToTerms
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-200 bg-gray-50 hover:border-zeal-blue hover:bg-blue-50'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                        agreedToTerms ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'
+                      }`}>
+                        {agreedToTerms && <i className="fas fa-check text-white text-[10px]"></i>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800">
+                          I have read and accept the{' '}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setActiveLegal('terms'); }}
+                            className="text-zeal-blue underline hover:text-zeal-red transition-colors"
+                          >
+                            Terms &amp; Conditions
+                          </button>
+                          {' '}including the{' '}
+                          <span className="text-red-600 font-black">No-Return &amp; No-Refund policy</span>.
+                        </p>
+                        {!agreedToTerms && (
+                          <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                            <i className="fas fa-info-circle mr-1"></i>Click to read and accept
+                          </p>
+                        )}
+                        {agreedToTerms && (
+                          <p className="text-[10px] text-green-600 mt-1 font-bold">
+                            <i className="fas fa-check-circle mr-1"></i>Accepted
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Privacy Policy checkbox */}
+                    <div
+                      onClick={() => !agreedToPrivacy && setActiveLegal('privacy')}
+                      className={`flex items-start gap-3 border rounded-sm p-4 transition-all cursor-pointer ${
+                        agreedToPrivacy
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-200 bg-gray-50 hover:border-zeal-blue hover:bg-blue-50'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                        agreedToPrivacy ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'
+                      }`}>
+                        {agreedToPrivacy && <i className="fas fa-check text-white text-[10px]"></i>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800">
+                          I have read and accept the{' '}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setActiveLegal('privacy'); }}
+                            className="text-zeal-blue underline hover:text-zeal-red transition-colors"
+                          >
+                            Privacy Policy
+                          </button>
+                          {' '}and consent to data processing under Nigerian NDPR.
+                        </p>
+                        {!agreedToPrivacy && (
+                          <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                            <i className="fas fa-info-circle mr-1"></i>Click to read and accept
+                          </p>
+                        )}
+                        {agreedToPrivacy && (
+                          <p className="text-[10px] text-green-600 mt-1 font-bold">
+                            <i className="fas fa-check-circle mr-1"></i>Accepted
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Submit */}
                   <button
@@ -284,6 +405,18 @@ export default function Register() {
       </div>
 
       <Footer />
+
+      {/* Legal Modals */}
+      {activeLegal && (
+        <LegalModal
+          type={activeLegal}
+          onClose={() => setActiveLegal(null)}
+          onAccept={(type) => {
+            if (type === 'terms') setAgreedToTerms(true);
+            if (type === 'privacy') setAgreedToPrivacy(true);
+          }}
+        />
+      )}
     </main>
   );
 }

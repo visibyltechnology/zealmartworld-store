@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, CreditCard, ShoppingBag } from 'lucide-react';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import useCartStore from '../store/useCartStore';
 import useAuthStore from '../store/useAuthStore';
@@ -14,6 +14,7 @@ import {
   createOrderPlacedNotification,
   createPaymentSuccessNotification
 } from '../utils/notificationService';
+import { nigeriaData } from '../data/locations';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -39,9 +40,54 @@ export default function Cart() {
     address: '',
     city: '',
     state: '',
+    landmark: '',
     phone: '',
     instructions: ''
   });
+  
+  const [profileData, setProfileData] = useState(null);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressIndex, setSelectedAddressIndex] = useState(-1);
+
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
+  const [phoneVerifiedForCart, setPhoneVerifiedForCart] = useState(true);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfileData(data);
+          
+          if (data.savedAddresses && data.savedAddresses.length > 0) {
+            setSavedAddresses(data.savedAddresses);
+            setSelectedAddressIndex(0);
+            setDeliveryInfo({ ...data.savedAddresses[0], instructions: '' });
+          } else if (data.phone) {
+            setDeliveryInfo(prev => ({ ...prev, phone: data.phone }));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user data:", err);
+      }
+    };
+    fetchUserData();
+  }, [user]);
+
+  // Check if phone changed
+  useEffect(() => {
+    if (profileData?.phone && deliveryInfo.phone && deliveryInfo.phone !== profileData.phone) {
+      setPhoneVerifiedForCart(false);
+    } else if (deliveryInfo.phone === profileData?.phone && profileData?.isPhoneVerified) {
+      setPhoneVerifiedForCart(true);
+    }
+  }, [deliveryInfo.phone, profileData]);
   const [showPreview, setShowPreview] = useState(false);
   const [conflictDismissed, setConflictDismissed] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
@@ -380,18 +426,67 @@ export default function Cart() {
             <div className="bg-white border border-gray-200 rounded-sm p-6 lg:p-8 shadow-sm sticky top-8">
               
               <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-100 pb-3">Delivery Information</h2>
-              <div className="flex flex-col gap-3 mb-8">
-                <input id="delivery-address" name="address" type="text" autoComplete="street-address" placeholder="Full Address" value={deliveryInfo.address} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, address: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+              
+              {savedAddresses.length > 0 && (
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider mb-2">Saved Addresses</label>
+                  <select 
+                    value={selectedAddressIndex}
+                    onChange={(e) => {
+                      const idx = Number(e.target.value);
+                      setSelectedAddressIndex(idx);
+                      if (idx >= 0) {
+                        setDeliveryInfo({ ...savedAddresses[idx], instructions: deliveryInfo.instructions });
+                        setSaveNewAddress(false);
+                      } else {
+                        setDeliveryInfo({ address: '', city: '', state: '', landmark: '', phone: profileData?.phone || '', instructions: deliveryInfo.instructions });
+                      }
+                    }}
+                    className="w-full bg-white border border-gray-200 text-sm font-bold rounded-sm px-3 py-2 outline-none focus:border-zeal-blue mb-4"
+                  >
+                    {savedAddresses.map((addr, idx) => (
+                      <option key={idx} value={idx}>{addr.address}, {addr.city}</option>
+                    ))}
+                    <option value={-1}>+ Add New Address</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 mb-4">
+                <input id="delivery-address" name="address" type="text" autoComplete="street-address" placeholder="Full Address" value={deliveryInfo.address} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, address: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
                 <div className="flex gap-3">
-                  <input id="delivery-city" name="city" type="text" autoComplete="address-level2" placeholder="City" value={deliveryInfo.city} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, city: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
-                  <input id="delivery-state" name="state" type="text" autoComplete="address-level1" placeholder="State" value={deliveryInfo.state} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, state: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                  <input type="text" value="Nigeria" disabled className="w-1/3 bg-gray-100 border border-gray-200 text-sm font-bold rounded-sm px-4 py-2.5 text-gray-500 cursor-not-allowed" title="Country is fixed to Nigeria" />
+                  <select id="delivery-state" name="state" value={deliveryInfo.state} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, state: e.target.value, city: '' }); setSelectedAddressIndex(-1); }} className="w-2/3 bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors">
+                    <option value="">Select State</option>
+                    {(nigeriaData || []).map(s => <option key={s.state} value={s.state}>{s.state}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <input id="delivery-phone" name="phone" type="tel" autoComplete="tel" placeholder="WhatsApp Number (e.g. +234...)" value={deliveryInfo.phone} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                  <input id="delivery-city" name="city" type="text" list="lga-list" autoComplete="address-level2" placeholder="Local Government Area (Select or Type)" value={deliveryInfo.city} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, city: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                  <datalist id="lga-list">
+                    {((nigeriaData || []).find(s => s.state === deliveryInfo.state)?.lgas || []).map(lga => (
+                      <option key={lga.name} value={lga.name} />
+                    ))}
+                  </datalist>
+                </div>
+                <input id="delivery-landmark" name="landmark" type="text" placeholder="Landmark (Optional)" value={deliveryInfo.landmark || ''} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, landmark: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
+                <div>
+                  <input id="delivery-phone" name="phone" type="tel" autoComplete="tel" placeholder="WhatsApp Number (e.g. +234...)" value={deliveryInfo.phone} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, phone: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
                   <span className="text-[10px] font-bold text-gray-500 mt-1 block uppercase tracking-wider">Required for WhatsApp delivery updates. Please include country code (+234).</span>
+                  {!phoneVerifiedForCart && deliveryInfo.phone && (
+                    <span className="text-[10px] font-bold text-amber-600 mt-1 block uppercase tracking-wider"><i className="fas fa-exclamation-triangle"></i> This new number will need to be verified.</span>
+                  )}
                 </div>
                 <textarea id="delivery-instructions" name="instructions" autoComplete="off" placeholder="Additional Instructions (Optional)" value={deliveryInfo.instructions} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors resize-y min-h-[80px]"></textarea>
               </div>
+
+              {selectedAddressIndex === -1 && savedAddresses.length < 3 && (
+                <div className="flex items-center gap-2 mb-8">
+                  <input type="checkbox" id="saveAddress" checked={saveNewAddress} onChange={(e) => setSaveNewAddress(e.target.checked)} className="rounded border-gray-300 text-zeal-blue focus:ring-zeal-blue" />
+                  <label htmlFor="saveAddress" className="text-xs font-bold text-gray-600 uppercase tracking-wider">Save this address for next time</label>
+                </div>
+              )}
+              {selectedAddressIndex !== -1 || savedAddresses.length >= 3 ? <div className="mb-8"></div> : null}
 
               <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-100 pb-3">Order Summary</h2>
               
@@ -416,7 +511,7 @@ export default function Cart() {
               )}
 
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!user) {
                     navigate('/login');
                     return;
@@ -428,6 +523,57 @@ export default function Cart() {
                     return;
                   }
                   setError('');
+
+                  if (!phoneVerifiedForCart) {
+                    // Trigger OTP send
+                    setVerifyingPhone(true);
+                    try {
+                      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+                      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+                      
+                      await updateDoc(doc(db, 'users', user.uid), {
+                        cartPhoneOtpCode: otpCode,
+                        cartPhoneOtpExpiresAt: otpExpiresAt
+                      });
+
+                      await addDoc(collection(db, 'otp_requests'), {
+                        phone: deliveryInfo.phone,
+                        otpCode: otpCode,
+                        status: 'pending',
+                        createdAt: serverTimestamp()
+                      });
+                      
+                      toast.success('Verification code sent to the new number via WhatsApp!');
+                      setShowPhoneVerify(true);
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Failed to send verification code to new number');
+                    } finally {
+                      setVerifyingPhone(false);
+                    }
+                    return;
+                  }
+
+                  if (saveNewAddress) {
+                    try {
+                      const newAddr = {
+                        address: deliveryInfo.address,
+                        city: deliveryInfo.city,
+                        state: deliveryInfo.state,
+                        landmark: deliveryInfo.landmark || '',
+                        phone: deliveryInfo.phone
+                      };
+                      const updatedAddresses = [...savedAddresses, newAddr].slice(0, 3);
+                      await updateDoc(doc(db, 'users', user.uid), {
+                        savedAddresses: updatedAddresses
+                      });
+                      setSavedAddresses(updatedAddresses);
+                      setSaveNewAddress(false);
+                    } catch (err) {
+                      console.error("Error saving address:", err);
+                    }
+                  }
+
                   setShowPreview(true);
                 }}
                 disabled={loading}
@@ -697,6 +843,87 @@ export default function Cart() {
         }
         return null;
       })()}
+      {/* Phone OTP Verification Modal */}
+      {showPhoneVerify && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-sm w-full max-w-sm p-6 shadow-2xl relative overflow-hidden">
+            <h3 className="text-lg font-black text-gray-900 mb-2">Verify Phone Number</h3>
+            <p className="text-sm text-gray-500 font-medium mb-6">Enter the 6-digit OTP sent to {deliveryInfo.phone}.</p>
+            
+            <div className="mb-6">
+              <input 
+                type="text" 
+                value={phoneOtp}
+                onChange={(e) => setPhoneOtp(e.target.value)}
+                placeholder="123456"
+                maxLength="6"
+                className="w-full border border-gray-300 rounded-sm px-4 py-3 text-center text-xl font-bold tracking-widest focus:border-zeal-blue outline-none"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowPhoneVerify(false)}
+                className="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-sm hover:bg-gray-50 transition-colors uppercase text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!phoneOtp) return;
+                  setVerifyingPhone(true);
+                  try {
+                    const docRef = doc(db, 'users', user.uid);
+                    const docSnap = await getDoc(docRef);
+                    const data = docSnap.data();
+                    
+                    if (data.cartPhoneOtpCode === phoneOtp && new Date() < data.cartPhoneOtpExpiresAt.toDate()) {
+                      await updateDoc(docRef, {
+                        cartPhoneOtpCode: null,
+                        cartPhoneOtpExpiresAt: null
+                      });
+                      setPhoneVerifiedForCart(true);
+                      setShowPhoneVerify(false);
+                      setPhoneOtp('');
+                      toast.success('Phone number verified successfully!');
+                      
+                      // Auto-save address if checked
+                      if (saveNewAddress) {
+                        const newAddr = {
+                          address: deliveryInfo.address,
+                          city: deliveryInfo.city,
+                          state: deliveryInfo.state,
+                          landmark: deliveryInfo.landmark || '',
+                          phone: deliveryInfo.phone
+                        };
+                        const updatedAddresses = [...savedAddresses, newAddr].slice(0, 3);
+                        await updateDoc(docRef, {
+                          savedAddresses: updatedAddresses
+                        });
+                        setSavedAddresses(updatedAddresses);
+                        setSaveNewAddress(false);
+                      }
+                      
+                      setShowPreview(true);
+                    } else {
+                      toast.error('Invalid or expired OTP');
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Verification failed');
+                  } finally {
+                    setVerifyingPhone(false);
+                  }
+                }}
+                disabled={verifyingPhone || phoneOtp.length !== 6}
+                className="flex-1 bg-zeal-red text-white font-bold py-2.5 rounded-sm hover:bg-red-800 transition-colors uppercase text-xs disabled:opacity-50"
+              >
+                {verifyingPhone ? 'Verifying...' : 'Verify & Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

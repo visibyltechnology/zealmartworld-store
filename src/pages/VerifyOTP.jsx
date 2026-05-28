@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
@@ -182,25 +182,51 @@ export default function VerifyOTP() {
         otpExpiresAt: newExpiresAt
       });
 
-      await emailjs.send(
-        'service_4qwypyf',
-        'template_o17qzmm',
-        {
-          email: email,
-          name: userData.firstName || 'Customer',
-          otp: newOtpCode,
-          code: newOtpCode
-        },
-        'A7Sq--0D6K2sijujF'
-      );
+      // Send via WhatsApp first (if phone exists)
+      if (userData.phone) {
+        try {
+          await addDoc(collection(db, 'otp_requests'), {
+            phone: userData.phone,
+            otpCode: newOtpCode,
+            status: 'pending',
+            createdAt: new Date()
+          });
+        } catch (waErr) {
+          console.error('WhatsApp resend error:', waErr);
+        }
+      }
 
-      toast.success('A new OTP has been sent to your email.');
+      // Send via EmailJS with error surfacing
+      try {
+        const result = await emailjs.send(
+          'service_4qwypyf',
+          'template_o17qzmm',
+          {
+            to_email: email,
+            email: email,
+            name: userData.firstName || 'Customer',
+            otp: newOtpCode,
+            code: newOtpCode
+          },
+          'CWdxDP7npAJ5fJzA1'
+        );
+        console.log('EmailJS resend success:', result.status, result.text);
+        toast.success('A new OTP has been sent to your email and WhatsApp.');
+      } catch (emailErr) {
+        console.error('EmailJS resend error:', emailErr);
+        toast.error(`Email send failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`, { duration: 6000 });
+        // WhatsApp fallback may still have worked
+        if (userData.phone) {
+          toast('Check your WhatsApp for the code.', { icon: '📱', duration: 5000 });
+        }
+      }
+
       setOtp(['', '', '', '', '', '']);
-      setTimeLeft(15 * 60); // Reset timer to 15 mins locally
+      setTimeLeft(15 * 60);
     } catch (err) {
       console.error(err);
       setError('Failed to resend OTP. Please try again later.');
-      toast.error('Failed to resend OTP.');
+      toast.error(`Resend failed: ${err?.message || 'Unknown error'}`);
     } finally {
       setResending(false);
     }
