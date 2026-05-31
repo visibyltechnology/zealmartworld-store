@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Package, CheckCircle, Clock, Bell, Users, AlertCircle, Search, ChevronDown, ChevronUp, SlidersHorizontal, Truck, Link as LinkIcon, Copy } from 'lucide-react';
 import { shipOrder } from '../../utils/orderTrackingService';
@@ -16,44 +16,56 @@ export default function AdminOrders() {
   const [newlyCompleted, setNewlyCompleted] = useState(new Set());
   const [userCache, setUserCache] = useState({});
 
-  const fetchOrders = async () => {
-    await Promise.resolve();
+  useEffect(() => {
     setLoading(true);
-    try {
-      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      const ordersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(ordersData);
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      try {
+        const ordersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setOrders(ordersData);
 
-      const uniqueUserIds = [...new Set(ordersData.map(o => o.userId).filter(Boolean))];
-      const cache = {};
-      await Promise.all(
-        uniqueUserIds.map(async (uid) => {
-          try {
-            const userSnap = await getDoc(doc(db, "users", uid));
-            if (userSnap.exists()) {
-              cache[uid] = userSnap.data();
+        // Update user cache for any new users
+        const uniqueUserIds = [...new Set(ordersData.map(o => o.userId).filter(Boolean))];
+        const newCache = { ...userCache };
+        let cacheUpdated = false;
+
+        await Promise.all(
+          uniqueUserIds.map(async (uid) => {
+            if (!newCache[uid]) {
+              try {
+                const userSnap = await getDoc(doc(db, "users", uid));
+                if (userSnap.exists()) {
+                  newCache[uid] = userSnap.data();
+                  cacheUpdated = true;
+                }
+              } catch {
+                // silently skip if user doc missing
+              }
             }
-          } catch {
-            // silently skip if user doc missing
-          }
-        })
-      );
-      setUserCache(cache);
-    } catch (err) {
+          })
+        );
+        
+        if (cacheUpdated) {
+          setUserCache(newCache);
+        }
+        setError('');
+      } catch (err) {
+        console.error(err);
+        setError("Failed to process orders data");
+      } finally {
+        setLoading(false);
+      }
+    }, (err) => {
       console.error(err);
       if (err.message && err.message.toLowerCase().includes('offline')) {
         setError("Please check your internet connection and try again.");
       } else {
-        setError("Failed to fetch orders");
+        setError("Failed to sync orders");
       }
-    } finally {
       setLoading(false);
-    }
-  };
+    });
 
-  useEffect(() => {
-    fetchOrders();
+    return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -72,7 +84,7 @@ export default function AdminOrders() {
       }
 
       await updateDoc(orderRef, updates);
-      setOrders(orders.map(o => o.id === orderId ? { ...o, ...updates } : o));
+      // Local setOrders update removed since onSnapshot handles it
     } catch (err) {
       console.error(err);
       alert("Failed to update payment amount");
@@ -86,7 +98,7 @@ export default function AdminOrders() {
     setUpdating(true);
     try {
       const { tracking_status, delivery_token } = await shipOrder(orderId, customerEmail);
-      setOrders(orders.map(o => o.id === orderId ? { ...o, tracking_status, delivery_token } : o));
+      // Local setOrders update removed since onSnapshot handles it
       alert("Order marked as Shipped! Rider token generated.");
     } catch (err) {
       console.error(err);

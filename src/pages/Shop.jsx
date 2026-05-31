@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import { isProductInStock, getStockDisplayText } from '../utils/inventoryService';
@@ -16,6 +16,26 @@ function pathToCategory(pathname) {
     return null;
 }
 
+// Helper to clean up messy brand names from the database
+function normalizeBrand(brand) {
+    if (!brand) return '';
+    let b = brand.trim().toLowerCase();
+    
+    if (b.includes('hisense')) return 'Hisense';
+    if (b.includes('tcl')) return 'TCL';
+    if (b.includes('lg')) return 'LG';
+    if (b.includes('samsung')) return 'Samsung';
+    if (b.includes('royal')) return 'Royal';
+    if (b.includes('thermocool') || b.includes('haier')) return 'Thermocool';
+    if (b.includes('panasonic')) return 'Panasonic';
+    if (b.includes('apple') || b.includes('iphone')) return 'Apple';
+    if (b.includes('sony')) return 'Sony';
+    if (b.includes('hp')) return 'HP';
+    
+    // Default fallback: Title Case
+    return b.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 export default function Shop() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
@@ -25,6 +45,7 @@ export default function Shop() {
     const initial = CATEGORIES.find(c => c.toLowerCase() === (urlCat || '').toLowerCase()) || 'All';
 
     const [active, setActive] = useState(initial);
+    const [activeBrand, setActiveBrand] = useState('All');
     const [search, setSearch] = useState(searchParams.get('search') || '');
     const [currentPage, setCurrentPage] = useState(1);
     const [products, setProducts] = useState([]);
@@ -40,35 +61,32 @@ export default function Shop() {
     });
 
     useEffect(() => {
-        const fetchProducts = async () => {
-            setLoading(true);
-            try {
-                const snap = await getDocs(collection(db, 'products'));
-                let items = snap.docs.map(d => ensureInventoryFields({ id: d.id, ...d.data() })).filter(p => !p.is_hidden);
-                
-                if (items.length === 0) {
-                    items = [
-                        { id: '1', name: 'Royal 1.5HP Split Air Conditioner', price: 285000, oldPrice: 310000, category: 'Air Conditioners', img: 'https://images.unsplash.com/photo-1667232231269-b5b50821d3f9?w=500&q=80', tag: 'Awoof', brand: 'Royal', inventory_status: 'in_stock', items_left: 8, unlimited_stock: false, is_hidden: false },
-                        { id: '2', name: 'HP Pavilion 15 (16GB RAM, 512GB SSD)', price: 450000, category: 'Laptops', img: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=500&q=80', brand: 'HP', inventory_status: 'out_of_stock', items_left: 0, unlimited_stock: false, is_hidden: false },
-                        { id: '3', name: 'Sony PlayStation 5 Console', price: 820000, oldPrice: 850000, category: 'Gaming', img: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=500&q=80', tag: 'Fast Moving', brand: 'Sony', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
-                        { id: '4', name: 'Samsung 65" Class CU7000 Crystal UHD 4K TV', price: 650000, category: 'Televisions', img: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=500&q=80', brand: 'Samsung', inventory_status: 'in_stock', items_left: 5, unlimited_stock: false, is_hidden: false },
-                        { id: '5', name: 'Thermocool 3.5kVA Generator (Igwe)', price: 420000, category: 'Generators', img: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&q=80', tag: 'Best Seller', brand: 'Thermocool', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
-                        { id: '6', name: 'Panasonic Top Load Washing Machine 10kg', price: 345000, category: 'Washing Machines', img: 'https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500&q=80', brand: 'Panasonic', inventory_status: 'in_stock', items_left: 6, unlimited_stock: false, is_hidden: false },
-                        { id: '7', name: 'iPhone 15 Pro Max 256GB', price: 1850000, oldPrice: 2000000, category: 'Phones', img: 'https://images.unsplash.com/photo-1696446701796-da6122569f74?w=500&q=80', brand: 'Apple', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
-                        { id: '8', name: 'Hisense 205L Double Door Refrigerator', price: 215000, category: 'Refrigerators', img: 'https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=500&q=80', brand: 'Hisense', inventory_status: 'in_stock', items_left: 7, unlimited_stock: false, is_hidden: false }
-                    ];
-                } else {
-                    // Ensure all fetched items have inventory fields
-                    items = items.map(ensureInventoryFields);
-                }
-                setProducts(items);
-            } catch (error) {
-                console.error('Error:', error);
-            } finally {
-                setLoading(false);
+        setLoading(true);
+        const unsubscribe = onSnapshot(collection(db, 'products'), (snap) => {
+            let items = snap.docs.map(d => ensureInventoryFields({ id: d.id, ...d.data() })).filter(p => !p.is_hidden);
+            
+            if (items.length === 0) {
+                items = [
+                    { id: '1', name: 'Royal 1.5HP Split Air Conditioner', price: 285000, oldPrice: 310000, category: 'Air Conditioners', img: 'https://images.unsplash.com/photo-1667232231269-b5b50821d3f9?w=500&q=80', tag: 'Awoof', brand: 'Royal', inventory_status: 'in_stock', items_left: 8, unlimited_stock: false, is_hidden: false },
+                    { id: '2', name: 'HP Pavilion 15 (16GB RAM, 512GB SSD)', price: 450000, category: 'Laptops', img: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=500&q=80', brand: 'HP', inventory_status: 'out_of_stock', items_left: 0, unlimited_stock: false, is_hidden: false },
+                    { id: '3', name: 'Sony PlayStation 5 Console', price: 820000, oldPrice: 850000, category: 'Gaming', img: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=500&q=80', tag: 'Fast Moving', brand: 'Sony', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
+                    { id: '4', name: 'Samsung 65" Class CU7000 Crystal UHD 4K TV', price: 650000, category: 'Televisions', img: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=500&q=80', brand: 'Samsung', inventory_status: 'in_stock', items_left: 5, unlimited_stock: false, is_hidden: false },
+                    { id: '5', name: 'Thermocool 3.5kVA Generator (Igwe)', price: 420000, category: 'Generators', img: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&q=80', tag: 'Best Seller', brand: 'Thermocool', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
+                    { id: '6', name: 'Panasonic Top Load Washing Machine 10kg', price: 345000, category: 'Washing Machines', img: 'https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500&q=80', brand: 'Panasonic', inventory_status: 'in_stock', items_left: 6, unlimited_stock: false, is_hidden: false },
+                    { id: '7', name: 'iPhone 15 Pro Max 256GB', price: 1850000, oldPrice: 2000000, category: 'Phones', img: 'https://images.unsplash.com/photo-1696446701796-da6122569f74?w=500&q=80', brand: 'Apple', inventory_status: 'in_stock', items_left: 0, unlimited_stock: true, is_hidden: false },
+                    { id: '8', name: 'Hisense 205L Double Door Refrigerator', price: 215000, category: 'Refrigerators', img: 'https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=500&q=80', brand: 'Hisense', inventory_status: 'in_stock', items_left: 7, unlimited_stock: false, is_hidden: false }
+                ];
+            } else {
+                items = items.map(ensureInventoryFields);
             }
-        };
-        fetchProducts();
+            setProducts(items);
+            setLoading(false);
+        }, (error) => {
+            console.error('Error fetching products:', error);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     useEffect(() => {
@@ -77,23 +95,31 @@ export default function Shop() {
             const match = CATEGORIES.find(c => c.toLowerCase() === cat.toLowerCase());
             setActive(match || 'All');
             setSearch('');
+            setActiveBrand('All');
         }
         
         const searchQ = searchParams.get('search');
         if (searchQ) {
             setSearch(searchQ);
             setActive('All');
+            setActiveBrand('All');
         }
     }, [location.search, location.pathname, searchParams]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, active]);
+    }, [search, active, activeBrand]);
 
     const filtered = products.filter(p => {
         const matchCat = active === 'All' || p.category === active;
-        const matchSearch = (p.name || '').toLowerCase().includes(search.toLowerCase());
-        return matchCat && matchSearch;
+        const normalizedBrand = normalizeBrand(p.brand);
+        const matchBrand = activeBrand === 'All' || normalizedBrand === activeBrand;
+        const searchLower = search.toLowerCase();
+        const matchSearch = (p.name || '').toLowerCase().includes(searchLower) ||
+                            normalizedBrand.toLowerCase().includes(searchLower) ||
+                            (p.category || '').toLowerCase().includes(searchLower) ||
+                            (p.tag || '').toLowerCase().includes(searchLower);
+        return matchCat && matchBrand && matchSearch;
     });
 
     const itemsPerPage = 120;
@@ -133,7 +159,7 @@ export default function Shop() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
                 {/* Sidebar Filters */}
                 <div className="w-full md:w-64 flex-shrink-0">
-                    <div className="bg-white border border-gray-200 overflow-hidden sticky top-6">
+                    <div className="bg-white border border-gray-200 overflow-y-auto sticky top-6" style={{ maxHeight: 'calc(100vh - 3rem)' }}>
                         <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between">
                             Categories
                             <i className="fas fa-list text-gray-400 text-xs"></i>
@@ -148,6 +174,27 @@ export default function Shop() {
                                         }`}
                                     >
                                         {cat}
+                                        <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+
+                        {/* Brands */}
+                        <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between border-t border-gray-200">
+                            Brands
+                            <i className="fas fa-tag text-gray-400 text-xs"></i>
+                        </div>
+                        <ul className="divide-y divide-gray-100">
+                            {['All', ...Array.from(new Set(products.map(p => normalizeBrand(p.brand)).filter(Boolean))).sort()].map(brand => (
+                                <li key={brand}>
+                                    <button
+                                        onClick={() => { setActiveBrand(brand); setCurrentPage(1); }}
+                                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${
+                                            activeBrand === brand ? 'text-zeal-red bg-red-50 border-l-4 border-zeal-red font-bold' : 'text-gray-600 border-l-4 border-transparent'
+                                        }`}
+                                    >
+                                        {brand}
                                         <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
                                     </button>
                                 </li>
@@ -221,7 +268,7 @@ export default function Shop() {
                                     
                     <div className="p-4 flex flex-col flex-grow">
                                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                            {p.brand || 'Official Partner'}
+                                            {normalizeBrand(p.brand) || 'Official Partner'}
                                         </p>
                                         <h3 className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-2 mb-3 group-hover:text-zeal-blue transition-colors">
                                             {p.name}

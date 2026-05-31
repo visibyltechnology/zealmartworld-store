@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import useCartStore from '../store/useCartStore';
@@ -16,19 +16,17 @@ export default function Navbar() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const docRef = doc(db, 'settings', 'site_settings');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().tickerMessages) {
-                    // Join multiple messages with spaces
-                    setTickerText(docSnap.data().tickerMessages.join('     |     '));
-                }
-            } catch (error) {
-                console.error("Error fetching ticker settings:", error);
+        const docRef = doc(db, 'settings', 'site_settings');
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists() && docSnap.data().tickerMessages) {
+                // Join multiple messages with spaces
+                setTickerText(docSnap.data().tickerMessages.join('     |     '));
             }
-        };
-        fetchSettings();
+        }, (error) => {
+            console.error("Error syncing ticker settings:", error);
+        });
+        
+        return () => unsubscribe();
     }, []);
 
     const handleSearch = (e) => {

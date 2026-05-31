@@ -12,6 +12,10 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import {
+  sendOrderOTPEmail,
+  sendTrackingUpdateEmail,
+} from './email';
 
 /**
  * Notification Types
@@ -255,6 +259,11 @@ export const createPaymentSuccessNotification = async (userId, orderId, amount) 
  * @param {string} otpCode - OTP code
  */
 export const createOrderOTPNotification = async (userId, orderId, otpCode) => {
+  // Send email notification (non-blocking)
+  sendOrderOTPEmail(userId, orderId, otpCode).catch(err =>
+    console.error('[notificationService] sendOrderOTPEmail failed:', err)
+  );
+
   return createNotification(userId, NOTIFICATION_TYPES.ORDER_OTP, {
     title: 'Your Package is Out for Delivery! 🚚',
     message: `Your order is on its way. Share this OTP with your dispatch rider: ${otpCode}`,
@@ -275,7 +284,12 @@ export const createOrderOTPNotification = async (userId, orderId, otpCode) => {
  */
 export const createTrackingUpdateNotification = async (userId, orderId, status, location) => {
   const statusInfo = ORDER_STATUS_STEPS[status] || { label: 'Update', accent: 'blue' };
-  
+
+  // Send email notification (non-blocking)
+  sendTrackingUpdateEmail(userId, orderId, status, location || '').catch(err =>
+    console.error('[notificationService] sendTrackingUpdateEmail failed:', err)
+  );
+
   return createNotification(userId, NOTIFICATION_TYPES.TRACKING_UPDATE, {
     title: `Order Update: ${statusInfo.label} 📦`,
     message: location || `Your order status has been updated to: ${statusInfo.label}`,

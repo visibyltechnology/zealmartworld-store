@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import useAuthStore from '../store/useAuthStore';
 import Footer from '../components/Footer';
@@ -49,30 +49,39 @@ export default function Profile() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
-      try {
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setProfileData(docSnap.data());
+    if (!user) return;
+    setLoading(true);
+    let unsubProfile = () => {};
+    let unsubOrders = () => {};
 
-        const q = query(collection(db, "orders"), where("userId", "==", user.uid));
-        const orderSnap = await getDocs(q);
+    try {
+      // Profile listener
+      const docRef = doc(db, 'users', user.uid);
+      unsubProfile = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) setProfileData(docSnap.data());
+      }, (err) => console.error("Profile sync error:", err));
+
+      // Orders listener
+      const q = query(collection(db, "orders"), where("userId", "==", user.uid));
+      unsubOrders = onSnapshot(q, (orderSnap) => {
         const ordersData = orderSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         ordersData.sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis());
         setOrders(ordersData);
-      } catch (err) {
-        console.error("Profile load error:", err);
-        if (err.message && err.message.toLowerCase().includes('offline')) {
-          setError('Please check your internet connection and try again.');
-        } else {
-          setError(`We encountered an issue loading your profile: ${err.message}`);
-        }
-      } finally {
         setLoading(false);
-      }
+      }, (err) => {
+        console.error("Orders sync error:", err);
+        setError(`We encountered an issue loading your orders: ${err.message}`);
+        setLoading(false);
+      });
+    } catch (err) {
+      console.error("Setup error:", err);
+      setLoading(false);
+    }
+
+    return () => {
+      unsubProfile();
+      unsubOrders();
     };
-    fetchData();
   }, [user]);
 
   const handleContinuePayment = async (order, amountToPay) => {
@@ -85,17 +94,7 @@ export default function Profile() {
         amountPaid: order.amountPaid + amountToPay,
         status: (order.amountPaid + amountToPay >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
       });
-      
-      setOrders(orders.map(o => {
-        if (o.id === order.id) {
-          return {
-            ...o,
-            amountPaid: o.amountPaid + amountToPay,
-            status: (o.amountPaid + amountToPay >= o.totalAmount) ? 'Completed' : 'Processing (Installments)'
-          };
-        }
-        return o;
-      }));
+      // Removing local setOrders update since onSnapshot handles it
       
       // Create a payment success notification for the user
       try {

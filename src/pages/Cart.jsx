@@ -705,7 +705,6 @@ export default function Cart() {
                                         className="bg-white border border-gray-200 text-[10px] uppercase tracking-wider font-bold text-gray-700 rounded-sm px-2 py-1 outline-none focus:border-zeal-blue"
                                       >
                                         <option value="weekly">Weekly</option>
-                                        <option value="monthly">Monthly</option>
                                       </select>
                                       <select
                                         value={unit.installments}

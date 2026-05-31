@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../firebase';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import Footer from '../components/Footer';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { sendForgotPasswordOTPEmail } from '../utils/email';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -19,51 +20,70 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const actionCodeSettings = {
-        url: window.location.origin + '/login',
-        handleCodeInApp: false,
-      };
-      await sendPasswordResetEmail(auth, email, actionCodeSettings);
-      setEmailSent(true);
-      toast.success('Password reset link sent!');
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
+      // 1. Check if user exists in Firestore
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
         setError('No account found with this email address.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many requests. Please try again later.');
-      } else {
-        setError('Failed to send reset link. Please try again.');
+        toast.error('No account found.');
+        setLoading(false);
+        return;
       }
-      toast.error('Failed to send reset link.');
+
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+
+      // 2. Generate OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // 3. Save OTP to Firestore
+      await updateDoc(doc(db, 'users', userDoc.id), {
+        resetOtp: otpCode,
+        resetOtpExpiresAt: otpExpiresAt
+      });
+
+      // 4. Send via WhatsApp/SMS (if phone exists)
+      if (userData.phone) {
+        try {
+          await addDoc(collection(db, 'otp_requests'), {
+            phone: userData.phone,
+            otpCode: otpCode,
+            status: 'pending',
+            createdAt: new Date()
+          });
+        } catch (waErr) {
+          console.error('WhatsApp OTP error:', waErr);
+        }
+      }
+
+      // 5. Send via EmailJS using our centralized service
+      try {
+        await sendForgotPasswordOTPEmail(
+          email,
+          userData.firstName || 'Customer',
+          otpCode
+        );
+      } catch (emailErr) {
+        console.error('EmailJS error:', emailErr);
+        // We continue even if EmailJS fails, because WhatsApp might have succeeded
+      }
+
+      // Redirect to Verify Reset OTP page
+      toast.success('Password reset code sent!');
+      navigate(`/reset-password?email=${encodeURIComponent(email)}`);
+
+    } catch (err) {
+      console.error(err);
+      setError('Failed to process reset request. Please try again.');
+      toast.error('Failed to send reset code.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (emailSent) {
-    return (
-      <main className="min-h-screen flex flex-col">
-        <div className="flex-grow bg-gray-50 flex flex-col items-center justify-center py-16 px-4 text-center">
-          <div className="max-w-md w-full bg-white p-8 rounded-sm shadow-md border border-gray-200">
-            <CheckCircle size={64} className="text-green-500 mx-auto mb-6" />
-            <h1 className="text-2xl font-black uppercase tracking-wide font-display text-gray-900 mb-2">Check Your Email</h1>
-            <p className="text-gray-500 font-medium mb-8">
-              A password reset link has been sent to <strong className="text-gray-900">{email}</strong>. 
-              Please check your inbox and follow the link to set a new password.
-            </p>
-            <Link to="/login" className="block w-full bg-zeal-dark hover:bg-black text-white font-black py-4 rounded-sm uppercase tracking-widest text-sm transition-all mb-4 text-center">
-              Back to Login
-            </Link>
-            <button onClick={() => setEmailSent(false)} className="text-sm font-bold text-zeal-blue hover:text-zeal-red transition-colors">
-              Try another email
-            </button>
-          </div>
-        </div>
-        <Footer />
-      </main>
-    );
-  }
-
+  // emailSent state is no longer used since we navigate directly to /reset-password
   return (
     <main className="min-h-screen flex flex-col">
       <div className="flex-grow bg-gray-50 flex items-center justify-center py-16 px-4">
@@ -118,9 +138,9 @@ export default function ForgotPassword() {
                   className="w-full bg-zeal-red hover:bg-red-800 disabled:opacity-60 text-white font-black py-4 rounded-sm uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                 >
                   {loading ? (
-                    <><i className="fas fa-spinner fa-spin"></i> Sending...</>
+                    <><i className="fas fa-spinner fa-spin"></i> Sending Code...</>
                   ) : (
-                    <>Send Reset Link</>
+                    <>Send Reset Code</>
                   )}
                 </button>
               </form>

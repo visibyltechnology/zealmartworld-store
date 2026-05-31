@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ArrowLeft, ChevronDown, CheckCircle, ShieldCheck, AlertCircle } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import useCartStore from '../store/useCartStore';
@@ -24,37 +24,37 @@ export default function ProductDetail() {
 
   const [showInstallment, setShowInstallment] = useState(false);
   const [installments, setInstallments] = useState(2);
-  const [paymentFrequency, setPaymentFrequency] = useState('monthly');
+  const [paymentFrequency, setPaymentFrequency] = useState('weekly');
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      setLoading(true);
-      try {
-        const docRef = doc(db, "products", id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          // Ensure product has inventory fields
-          const productWithInventory = {
-            id: docSnap.id,
-            ...data,
-            inventory_status: data.inventory_status || 'in_stock',
-            items_left: data.items_left !== undefined ? data.items_left : 5,
-            unlimited_stock: data.unlimited_stock || false,
-            is_hidden: data.is_hidden || false
-          };
-          setProduct(productWithInventory);
-        } else {
-          setError("Product not found");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load product");
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    const docRef = doc(db, "products", id);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Ensure product has inventory fields
+        const productWithInventory = {
+          id: docSnap.id,
+          ...data,
+          inventory_status: data.inventory_status || 'in_stock',
+          items_left: data.items_left !== undefined ? data.items_left : 5,
+          unlimited_stock: data.unlimited_stock || false,
+          is_hidden: data.is_hidden || false
+        };
+        setProduct(productWithInventory);
+        setError('');
+      } else {
+        setError("Product not found");
+        setProduct(null);
       }
-    };
-    fetchProduct();
+      setLoading(false);
+    }, (err) => {
+      console.error(err);
+      setError("Failed to load product");
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [id]);
 
   if (loading) {
@@ -235,25 +235,11 @@ export default function ProductDetail() {
               {showInstallment && isProductInStock(product) && (
                 <div className="p-6 border-t border-gray-200">
                   
-                  {/* Frequency Toggle */}
-                  <div className="flex bg-gray-200/50 p-1 rounded-sm mb-6 w-full max-w-xs mx-auto">
-                    <button
-                      className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-sm transition-all ${paymentFrequency === 'monthly' ? 'bg-white text-zeal-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                      onClick={() => setPaymentFrequency('monthly')}
-                    >
-                      Monthly
-                    </button>
-                    <button
-                      className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-sm transition-all ${paymentFrequency === 'weekly' ? 'bg-white text-zeal-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                      onClick={() => setPaymentFrequency('weekly')}
-                    >
-                      Weekly
-                    </button>
-                  </div>
+                  {/* Frequency: Weekly only */
 
                   {/* Duration Selector */}
                   <div className="mb-6">
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 text-center">Select Duration ({paymentFrequency === 'weekly' ? 'Weeks' : 'Months'})</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 text-center">Select Duration (Weeks)</label>
                     <div className="flex flex-wrap justify-center gap-2">
                       {[2, 3, 4, 5, 6].map(n => (
                         <button
@@ -286,8 +272,8 @@ export default function ProductDetail() {
                       <span className="text-sm font-black text-gray-900">{fmt(total)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-1">
-                      <span className="text-sm font-bold text-gray-800">{paymentFrequency === 'monthly' ? 'Monthly payment' : 'Weekly payment'}</span>
-                      <span className="text-lg font-black text-zeal-blue">{fmt(periodPayment)} <span className="text-xs text-gray-400 font-medium">/{paymentFrequency === 'weekly' ? 'wk' : 'mo'}</span></span>
+                      <span className="text-sm font-bold text-gray-800">Weekly payment</span>
+                      <span className="text-lg font-black text-zeal-blue">{fmt(periodPayment)} <span className="text-xs text-gray-400 font-medium">/wk</span></span>
                     </div>
                   </div>
                   
@@ -302,7 +288,7 @@ export default function ProductDetail() {
                     className="w-full bg-white border-2 border-zeal-blue text-zeal-blue hover:bg-zeal-blue hover:text-white font-black py-3.5 rounded-sm text-sm uppercase tracking-widest transition-all shadow-sm flex items-center justify-center gap-2" 
                     onClick={handleInstallment}
                   >
-                    Start {paymentFrequency === 'weekly' ? 'Weekly' : 'Monthly'} Plan
+                    Start Weekly Plan
                   </button>
                 </div>
               )}

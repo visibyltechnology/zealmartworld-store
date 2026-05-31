@@ -5,7 +5,7 @@ import { auth, db } from '../firebase';
 import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
-import emailjs from '@emailjs/browser';
+import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 import LegalModal from '../components/LegalModal';
 
@@ -102,19 +102,16 @@ export default function Register() {
         }
 
         try {
-          const emailResult = await emailjs.send(
-            'service_4qwypyf',
-            'template_o17qzmm',
-            {
-              to_email: formData.email,   // explicit recipient field
-              email: formData.email,
-              name: formData.firstName,
-              otp: otpCode,
-              code: otpCode
-            },
-            'CWdxDP7npAJ5fJzA1'
+          const sent = await sendRegistrationOTPEmail(
+            formData.email,
+            formData.firstName,
+            otpCode
           );
-          console.log('EmailJS success:', emailResult.status, emailResult.text);
+          if (sent) {
+            console.log('EmailJS success');
+          } else {
+            throw new Error('Email failed to send');
+          }
         } catch (emailErr) {
           console.error("EmailJS error:", emailErr);
           // Show the actual error so you can diagnose

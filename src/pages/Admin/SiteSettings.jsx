@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import toast from 'react-hot-toast';
 import { Save, Plus, Trash2, Settings as SettingsIcon, LayoutTemplate, MessageSquare, Upload } from 'lucide-react';
@@ -25,23 +25,22 @@ export default function SiteSettings() {
     ]);
 
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const docRef = doc(db, 'settings', 'site_settings');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.tickerMessages) setTickerMessages(data.tickerMessages);
-                    if (data.heroSlides) setHeroSlides(data.heroSlides);
-                }
-            } catch (error) {
-                console.error("Error loading settings:", error);
-                toast.error("Failed to load settings.");
-            } finally {
-                setLoading(false);
+        setLoading(true);
+        const docRef = doc(db, 'settings', 'site_settings');
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.tickerMessages) setTickerMessages(data.tickerMessages);
+                if (data.heroSlides) setHeroSlides(data.heroSlides);
             }
-        };
-        fetchSettings();
+            setLoading(false);
+        }, (error) => {
+            console.error("Error syncing settings:", error);
+            toast.error("Failed to sync settings.");
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     const handleSave = async () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, limit, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 
@@ -93,35 +93,44 @@ export default function Home() {
         return () => clearInterval(timer);
     }, [slides.length]);
 
-    // Fetch featured products & settings
+    // Real-time Fetch featured products & settings
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // Fetch Settings (Carousel)
-                const settingsSnap = await getDoc(doc(db, 'settings', 'site_settings'));
-                if (settingsSnap.exists() && settingsSnap.data().heroSlides && settingsSnap.data().heroSlides.length > 0) {
-                    setSlides(settingsSnap.data().heroSlides);
-                }
+        setFeatLoading(true);
 
-                // Fetch Featured
-                const q = query(collection(db, "products"), where("featured", "==", true), limit(12));
-                const snap = await getDocs(q);
-                let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                
-                if (items.length > 0) {
-                    items.sort((a, b) => {
-                        const posA = a.featuredPosition ?? Infinity;
-                        const posB = b.featuredPosition ?? Infinity;
-                        return posA - posB;
-                    });
-                    setFeatured(items);
-                }
-            } catch (error) {
-                console.error("Error fetching data:", error);
+        // Settings listener (Carousel)
+        const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'site_settings'), (docSnap) => {
+            if (docSnap.exists() && docSnap.data().heroSlides && docSnap.data().heroSlides.length > 0) {
+                setSlides(docSnap.data().heroSlides);
+            }
+        }, (error) => console.error("Error syncing settings:", error));
+
+        // Featured products listener
+        const q = query(collection(db, "products"), where("featured", "==", true), limit(12));
+        const unsubscribeProducts = onSnapshot(q, (snap) => {
+            let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            if (items.length > 0) {
+                items.sort((a, b) => {
+                    const posA = a.featuredPosition ?? Infinity;
+                    const posB = b.featuredPosition ?? Infinity;
+                    return posA - posB;
+                });
+                setFeatured(items);
+            } else {
                 setFeatured(DEFAULT_FEATURED);
             }
+            setFeatLoading(false);
+        }, (error) => {
+            console.error("Error syncing products:", error);
+            setFeatured(DEFAULT_FEATURED);
+            setFeatLoading(false);
+        });
+
+        // Cleanup listeners
+        return () => {
+            unsubscribeSettings();
+            unsubscribeProducts();
         };
-        fetchData();
     }, []);
 
     const brands = [

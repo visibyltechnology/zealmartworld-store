@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { verifyDeliveryOTP } from '../utils/otpService';
 import { confirmDelivery, validateDeliveryToken } from '../utils/orderTrackingService';
 import { uploadProofOfDeliveryImage } from '../utils/mediaUploadService';
-import { getDoc, doc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function DeliveryPortal() {
@@ -22,6 +22,8 @@ export default function DeliveryPortal() {
 
   // Validate token and fetch order
   useEffect(() => {
+    let unsubscribe = () => {};
+
     const validateAndFetch = async () => {
       try {
         if (!orderId || !token) {
@@ -36,22 +38,26 @@ export default function DeliveryPortal() {
           return;
         }
 
-        // Fetch order
+        // Fetch order with real-time listener
         const orderRef = doc(db, 'orders', orderId);
-        const orderSnap = await getDoc(orderRef);
+        unsubscribe = onSnapshot(orderRef, (orderSnap) => {
+          if (!orderSnap.exists()) {
+            setError('Order not found');
+            return;
+          }
+          setOrder(orderSnap.data());
+        }, (err) => {
+          setError(`Error loading delivery: ${err.message}`);
+        });
 
-        if (!orderSnap.exists()) {
-          setError('Order not found');
-          return;
-        }
-
-        setOrder(orderSnap.data());
       } catch (err) {
-        setError(`Error loading delivery: ${err.message}`);
+        setError(`Error checking token: ${err.message}`);
       }
     };
 
     validateAndFetch();
+
+    return () => unsubscribe();
   }, [orderId, token]);
 
   const handleOtpSubmit = async (e) => {

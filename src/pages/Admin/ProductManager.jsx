@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Link } from 'react-router-dom';
 import {
@@ -292,21 +292,20 @@ export default function ProductManager() {
   const [filterCat, setFilterCat] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
 
-  const fetchProducts = async () => {
+  useEffect(() => {
     setLoading(true);
-    try {
-      const querySnapshot = await getDocs(collection(db, 'products'));
+    const unsubscribe = onSnapshot(collection(db, 'products'), (querySnapshot) => {
       const items = [];
       querySnapshot.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setProducts(items);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (error) => {
+      console.error('Error syncing products:', error);
+      setLoading(false);
+    });
 
-  useEffect(() => { fetchProducts(); }, []);
+    return () => unsubscribe();
+  }, []);
 
    const handleDelete = async (id) => {
      const product = products.find(p => p.id === id);
@@ -326,7 +325,7 @@ export default function ProductManager() {
      if (window.confirm(message)) {
        try {
          await deleteDoc(doc(db, 'products', id));
-         setProducts(prev => prev.filter(p => p.id !== id));
+         // Local setProducts update removed since onSnapshot handles it
        } catch (error) {
          console.error('Error deleting product:', error);
          alert('Failed to delete product. Please try again.');
@@ -337,7 +336,7 @@ export default function ProductManager() {
    const handleUpdateProduct = async (id, updates) => {
      try {
        await updateDoc(doc(db, 'products', id), updates);
-       setProducts(prev => prev.map(p => p.id === id ? {...p, ...updates} : p));
+       // Local setProducts update removed since onSnapshot handles it
      } catch (error) {
        console.error('Error updating product:', error);
        alert('Failed to update product. Please try again.');
@@ -347,7 +346,7 @@ export default function ProductManager() {
    const handleHiddenToggle = async (productId, currentStatus) => {
      try {
        await updateDoc(doc(db, 'products', productId), { is_hidden: !currentStatus });
-       setProducts(prev => prev.map(p => p.id === productId ? {...p, is_hidden: !currentStatus} : p));
+       // Local setProducts update removed since onSnapshot handles it
      } catch (error) {
        console.error('Error toggling visibility:', error);
        alert('Failed to toggle product visibility.');
@@ -366,9 +365,7 @@ export default function ProductManager() {
              featured: false,
              featuredPosition: null
            });
-           setProducts(prev => prev.map(p => 
-             p.id === productId ? {...p, featured: false, featuredPosition: null} : p
-           ));
+           // Local setProducts update removed since onSnapshot handles it
          } catch (error) {
            console.error('Error unfeaturing product:', error);
            alert('Failed to update product. Please try again.');
@@ -402,9 +399,7 @@ export default function ProductManager() {
              featured: true,
              featuredPosition: pos
            });
-           setProducts(prev => prev.map(p => 
-             p.id === productId ? {...p, featured: true, featuredPosition: pos} : p
-           ));
+           // Local setProducts update removed since onSnapshot handles it
          } catch (error) {
            console.error('Error featuring product:', error);
            alert('Failed to update product. Please try again.');

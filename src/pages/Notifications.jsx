@@ -4,7 +4,7 @@ import { ArrowLeft, Trash2, Eye, EyeOff, Copy } from 'lucide-react';
 import Footer from '../components/Footer';
 import useAuthStore from '../store/useAuthStore';
 import {
-  getUserNotifications,
+  subscribeToUserNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
@@ -47,20 +47,13 @@ function NotificationsPage() {
       return;
     }
 
-    const fetchNotifications = async () => {
-      try {
-        setLoading(true);
-        const notifs = await getUserNotifications(user.uid, 100);
-        setNotifications(notifs.filter(n => !n.is_deleted));
-      } catch (error) {
-        console.error('Error fetching notifications:', error);
-        toast.error('Failed to load notifications');
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(true);
+    const unsubscribe = subscribeToUserNotifications(user.uid, (notifs) => {
+      setNotifications(notifs.filter(n => !n.is_deleted));
+      setLoading(false);
+    });
 
-    fetchNotifications();
+    return () => unsubscribe();
   }, [user, navigate]);
 
   const handleMarkAsRead = async (notificationId) => {
