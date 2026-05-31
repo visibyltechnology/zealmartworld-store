@@ -34,9 +34,9 @@ export default function ReturnToTopButton() {
       onClick={scrollToTop}
       style={{
         position: 'fixed',
-        bottom: '2rem',
-        right: '2rem',
-        zIndex: 9999,
+        bottom: '6.5rem',
+        right: '1.75rem',
+        zIndex: 40,
         background: 'var(--zeal-blue, #0056b3)',
         color: 'white',
         border: 'none',

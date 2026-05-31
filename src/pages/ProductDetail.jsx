@@ -235,7 +235,7 @@ export default function ProductDetail() {
               {showInstallment && isProductInStock(product) && (
                 <div className="p-6 border-t border-gray-200">
                   
-                  {/* Frequency: Weekly only */
+                  {/* Frequency: Weekly only */}
 
                   {/* Duration Selector */}
                   <div className="mb-6">
