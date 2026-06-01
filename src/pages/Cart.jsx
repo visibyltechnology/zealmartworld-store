@@ -224,16 +224,28 @@ export default function Cart() {
         return;
       }
 
+      let paymentProcessed = false;
+
+      // Safety timeout — if Korapay never fires any callback, reset after 90s
+      const safetyTimer = setTimeout(() => {
+        if (!paymentProcessed) setLoading(false);
+      }, 90000);
+
       window.Korapay.initialize({
         key: koraKey,
         reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: totalToPayNow,
+        amount: Math.round(totalToPayNow),
         currency: "NGN",
+
         customer: {
             name: user.displayName || user.email.split('@')[0],
             email: user.email
         },
         onSuccess: async function(response) {
+            if (paymentProcessed) return;
+            paymentProcessed = true;
+            clearTimeout(safetyTimer);
+            setLoading(true);
             toast.success("Payment verified! Processing order...");
             try {
               if (splitMode) {
@@ -316,10 +328,22 @@ export default function Cart() {
             }
         },
         onClose: function() {
+            clearTimeout(safetyTimer);
             setLoading(false);
-            toast.error("Payment was cancelled.");
+            if (!paymentProcessed) toast.error("Payment was cancelled.");
+        },
+        onFailed: function(response) {
+            clearTimeout(safetyTimer);
+            setLoading(false);
+            const msg = response?.data?.message || "Payment failed. Please try again.";
+            toast.error(msg);
+            setError(msg);
+        },
+        onTokenized: function() {
+            // no-op: tokenized payments don't need extra handling
         }
       });
+      setLoading(false);
     } catch (err) {
       console.error("Error initializing payment:", err);
       setError("Failed to initialize payment gateway.");
