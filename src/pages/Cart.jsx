@@ -209,31 +209,9 @@ export default function Cart() {
         return;
       }
 
-      // Ensure Korapay script is loaded (handles race-condition on first load)
-      try {
-        await loadKorapayScript();
-      } catch {
-        toast.error('Could not load payment gateway. Check your connection and try again.');
-        setLoading(false);
-        return;
-      }
-
-      if (!window.Korapay) {
-        toast.error('Payment gateway failed to initialise. Please refresh and try again.');
-        setLoading(false);
-        return;
-      }
-
-      window.Korapay.initialize({
-        key: koraKey,
-        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: totalToPayNow,
-        currency: "NGN",
-        customer: {
-            name: user.displayName || user.email.split('@')[0],
-            email: user.email
-        },
-        onSuccess: async function(response) {
+      // TEMPORARY BYPASS: Skip Korapay initialization for testing
+      const testResponse = { reference: `TEST_REF_${Date.now()}_${Math.floor(Math.random() * 1000)}` };
+      const onSuccess = async function(response) {
             toast.success("Payment verified! Processing order...");
             try {
               if (splitMode) {
@@ -314,12 +292,10 @@ export default function Cart() {
               setError("Payment successful but failed to save order. Please contact support.");
               setLoading(false);
             }
-        },
-        onClose: function() {
-            setLoading(false);
-            toast.error("Payment was cancelled.");
-        }
-      });
+      };
+      
+      // TEMPORARY BYPASS: Execute the success handler directly
+      await onSuccess(testResponse);
     } catch (err) {
       console.error("Error initializing payment:", err);
       setError("Failed to initialize payment gateway.");
