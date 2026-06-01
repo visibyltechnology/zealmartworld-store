@@ -44,21 +44,7 @@ export default function ForgotPassword() {
         resetOtpExpiresAt: otpExpiresAt
       });
 
-      // 4. Send via WhatsApp/SMS (if phone exists)
-      if (userData.phone) {
-        try {
-          await addDoc(collection(db, 'otp_requests'), {
-            phone: userData.phone,
-            otpCode: otpCode,
-            status: 'pending',
-            createdAt: new Date()
-          });
-        } catch (waErr) {
-          console.error('WhatsApp OTP error:', waErr);
-        }
-      }
-
-      // 5. Send via EmailJS using our centralized service
+      // 4. Send via EmailJS using our centralized service
       try {
         await sendForgotPasswordOTPEmail(
           email,

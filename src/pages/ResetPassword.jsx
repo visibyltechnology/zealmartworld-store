@@ -3,7 +3,9 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
-import axios from 'axios';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
+import { db, auth } from '../firebase';
 import { sendPasswordResetSuccessEmail } from '../utils/email';
 
 export default function ResetPassword() {

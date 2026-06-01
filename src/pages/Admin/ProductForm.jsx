@@ -11,6 +11,13 @@ import toast from 'react-hot-toast';
 
 const CATEGORIES = ['Air Conditioners', 'Televisions', 'Washing Machines', 'Refrigerators', 'Generators', 'Phones', 'Laptops', 'Audio', 'Gaming'];
 
+const KNOWN_BRANDS = [
+  'Samsung', 'LG', 'Hisense', 'TCL', 'Apple', 'Sony', 'HP', 'Panasonic',
+  'Royal', 'Thermocool', 'Haier', 'Bruhm', 'Skyrun', 'Scanfrost', 'Nasco',
+  'Polystar', 'Nexus', 'Syinix', 'Vitron', 'Itel', 'Tecno', 'Infinix',
+  'Xiaomi', 'Lenovo', 'Dell', 'Asus', 'Acer', 'JBL', 'Bose', 'Yamaha',
+];
+
 const CATEGORY_COLORS = {
   'Air Conditioners':  { bg: 'rgba(59,130,246,0.12)', text: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
   'Televisions':     { bg: 'rgba(139,92,246,0.12)', text: '#7c3aed', border: 'rgba(139,92,246,0.35)' },
@@ -354,13 +361,30 @@ export default function ProductForm() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
               <FieldGroup label="Brand" icon={<Tag size={14} />} accent="#10b981">
-                <input
-                  type="text" name="brand" value={formData.brand || ''}
-                  onChange={handleChange} placeholder="e.g. Samsung, LG, Hisense..."
-                  style={inputStyle}
-                  onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.12)'; }}
-                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text" name="brand" value={formData.brand || ''}
+                    onChange={handleChange}
+                    list="brand-list"
+                    placeholder="Select or type a brand…"
+                    style={inputStyle}
+                    onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  <datalist id="brand-list">
+                    {KNOWN_BRANDS.map(b => <option key={b} value={b} />)}
+                  </datalist>
+                  {formData.brand && !KNOWN_BRANDS.includes(formData.brand) && (
+                    <span style={{
+                      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                      background: '#f59e0b', color: '#fff',
+                      fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 99, letterSpacing: '0.06em'
+                    }}>CUSTOM</span>
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  Choose from the list or type a custom brand name
+                </p>
               </FieldGroup>
 
               <FieldGroup label="Product Description / Features" icon={<Sparkles size={14} />} accent="#8b5cf6">

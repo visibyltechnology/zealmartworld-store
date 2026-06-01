@@ -94,7 +94,7 @@ const useCartStore = create(
             return total + (item.price * item.quantity);
           } else {
             // If they chose installment, we calculate the total amount they are committing to
-            const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
+            const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
             const rate = INTEREST[item.installments] / 100;
             const fullAmount = item.price * (1 + rate);
             return total + (fullAmount * item.quantity);

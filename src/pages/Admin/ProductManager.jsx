@@ -7,6 +7,29 @@ import {
   SlidersHorizontal, Ruler, BadgePercent, ArrowUpDown, Eye, EyeOff
 } from 'lucide-react';
 
+const KNOWN_BRANDS = [
+  'Samsung', 'LG', 'Hisense', 'TCL', 'Apple', 'Sony', 'HP', 'Panasonic',
+  'Royal', 'Thermocool', 'Haier', 'Bruhm', 'Skyrun', 'Scanfrost', 'Nasco',
+  'Polystar', 'Nexus', 'Syinix', 'Vitron', 'Itel', 'Tecno', 'Infinix',
+  'Xiaomi', 'Lenovo', 'Dell', 'Asus', 'Acer', 'JBL', 'Bose', 'Yamaha',
+];
+
+function normalizeBrand(brand) {
+  if (!brand) return '';
+  const b = brand.trim().toLowerCase();
+  if (b.includes('hisense')) return 'Hisense';
+  if (b.includes('tcl')) return 'TCL';
+  if (b.includes('lg')) return 'LG';
+  if (b.includes('samsung')) return 'Samsung';
+  if (b.includes('royal')) return 'Royal';
+  if (b.includes('thermocool') || b.includes('haier')) return 'Thermocool';
+  if (b.includes('panasonic')) return 'Panasonic';
+  if (b.includes('apple') || b.includes('iphone')) return 'Apple';
+  if (b.includes('sony')) return 'Sony';
+  if (b.includes('hp')) return 'HP';
+  return brand.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
 const CATEGORY_STYLES = {
   'Air Conditioners':  { bg: '#eff6ff', text: '#3b82f6', border: '#bfdbfe', dot: '#3b82f6', glow: 'rgba(59,130,246,0.15)' },
   'Televisions':     { bg: '#f3f0ff', text: '#7c3aed', border: '#ddd6fe', dot: '#7c3aed', glow: 'rgba(124,58,237,0.15)' },
@@ -290,6 +313,7 @@ export default function ProductManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('All');
+  const [filterBrand, setFilterBrand] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
 
   useEffect(() => {
@@ -408,11 +432,20 @@ export default function ProductManager() {
      }
    };
 
+  const brandSet = ['All', ...Array.from(new Set(products.map(p => normalizeBrand(p.brand)).filter(Boolean))).sort()];
+
   const filtered = products
     .filter(p => {
-      const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase());
+      const q = search.toLowerCase();
+      const pBrand = normalizeBrand(p.brand);
+      const matchSearch = !q ||
+        (p.name || '').toLowerCase().includes(q) ||
+        pBrand.toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q) ||
+        (p.tag || '').toLowerCase().includes(q);
       const matchCat = filterCat === 'All' ? true : (filterCat === 'Featured' ? p.featured : p.category === filterCat);
-      return matchSearch && matchCat;
+      const matchBrand = filterBrand === 'All' || pBrand === filterBrand;
+      return matchSearch && matchCat && matchBrand;
     })
     .sort((a, b) => {
       if (filterCat === 'Featured') {
@@ -516,8 +549,9 @@ export default function ProductManager() {
         </div>
 
         {/* Category filter */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%' }}>
           <SlidersHorizontal size={15} style={{ color: '#9ca3af', alignSelf: 'center' }} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', alignSelf: 'center' }}>Category:</span>
           {['All', 'Featured', ...Object.keys(CATEGORY_STYLES)].map(cat => {
             const s = cat === 'All' ? null : CATEGORY_STYLES[cat];
             const active = filterCat === cat;
@@ -539,6 +573,27 @@ export default function ProductManager() {
               </button>
             );
           })}
+        </div>
+
+        {/* Brand filter */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', alignSelf: 'center', marginRight: 2 }}>Brand:</span>
+          {brandSet.map(brand => (
+            <button
+              key={brand}
+              onClick={() => setFilterBrand(brand)}
+              style={{
+                padding: '5px 12px', borderRadius: 99, border: '1.5px solid',
+                fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                letterSpacing: '0.05em', transition: 'all 0.15s',
+                background: filterBrand === brand ? '#10b981' : '#f3f4f6',
+                borderColor: filterBrand === brand ? '#059669' : '#e5e7eb',
+                color: filterBrand === brand ? '#fff' : '#6b7280',
+              }}
+            >
+              {brand}
+            </button>
+          ))}
         </div>
 
         {/* Sort */}

@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 import useCartStore from '../store/useCartStore';
 import { isProductInStock, INVENTORY_STATUS, getStockDisplayText } from '../utils/inventoryService';
 
-const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
+const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');

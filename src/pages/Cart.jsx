@@ -151,7 +151,7 @@ export default function Cart() {
   };
 
   const recalcPeriodPayment = (item, targetFreq, targetDur) => {
-    const INTEREST = { 2: 0, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+    const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
     const rate = INTEREST[targetDur] ?? 0.2;
     const fullAmount = item.price * (1 + rate);
     if (targetFreq === 'weekly') {
@@ -246,7 +246,7 @@ export default function Cart() {
                     merged[unit.cartItemId].quantity += 1;
                   });
                   const groupItems = Object.values(merged);
-                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
                   const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
 
                   for (const item of groupItems) {
@@ -284,7 +284,7 @@ export default function Cart() {
                   }
                 }
 
-                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
                 const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
                   userId: user.uid,
                   items: items,
