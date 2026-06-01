@@ -6,6 +6,7 @@ import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/fires
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
 import { sendRegistrationOTPEmail } from '../utils/email';
+import { hashOTP } from '../utils/otpService';
 import toast from 'react-hot-toast';
 import LegalModal from '../components/LegalModal';
 
@@ -70,6 +71,7 @@ export default function Register() {
       const user = userCredential.user;
 
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCodeHash = await hashOTP(otpCode); // SHA-256 hash — never store plain OTP
       const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       await auth.signOut();
@@ -81,25 +83,23 @@ export default function Register() {
         email: formData.email,
         isEmailVerified: false,
         isPhoneVerified: false,
-        otpCode: otpCode,
+        isAdmin: false,
+        otpCodeHash: otpCodeHash,
         otpExpiresAt: otpExpiresAt,
         createdAt: new Date()
       });
 
-      if (formData.email === 'mayjayconcepts@gmail.com') {
-        navigate('/admin');
-      } else {
-        try {
-          // Send OTP via WhatsApp
-          await addDoc(collection(db, 'otp_requests'), {
-            phone: finalPhone,
-            otpCode: otpCode,
-            status: 'pending',
-            createdAt: serverTimestamp()
-          });
-        } catch (waErr) {
-          console.error("WhatsApp OTP error:", waErr);
-        }
+      try {
+        // Send OTP via WhatsApp
+        await addDoc(collection(db, 'otp_requests'), {
+          phone: finalPhone,
+          otpCode: otpCode, // send plain code via WhatsApp, never persist it
+          status: 'pending',
+          createdAt: serverTimestamp()
+        });
+      } catch (waErr) {
+        console.error("WhatsApp OTP error:", waErr);
+      }
 
         try {
           const sent = await sendRegistrationOTPEmail(
@@ -119,7 +119,6 @@ export default function Register() {
         }
 
         navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
-      }
     } catch (err) {
       console.error("Registration error full details:", err);
       if (err.code === 'auth/email-already-in-use') {

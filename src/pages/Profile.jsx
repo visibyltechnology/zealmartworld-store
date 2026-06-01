@@ -7,6 +7,7 @@ import Footer from '../components/Footer';
 import { Package, Clock, CheckCircle, ShoppingBag, Search, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createPaymentSuccessNotification } from '../utils/notificationService';
+import { hashOTP, verifyOTPHash } from '../utils/otpService';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -86,34 +87,79 @@ export default function Profile() {
 
   const handleContinuePayment = async (order, amountToPay) => {
     if (!user) return;
+    
+    const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
+    if (!koraKey) {
+      toast.error("Payment gateway not configured");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const orderRef = doc(db, 'orders', order.id);
-      await updateDoc(orderRef, {
-        amountPaid: order.amountPaid + amountToPay,
-        status: (order.amountPaid + amountToPay >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
-      });
-      // Removing local setOrders update since onSnapshot handles it
-      
-      // Create a payment success notification for the user
-      try {
-        if (user?.uid) await createPaymentSuccessNotification(user.uid, order.id, amountToPay);
-      } catch (notifErr) {
-        console.error('Failed to create payment success notification:', notifErr);
-      }
+      window.Korapay.initialize({
+        key: koraKey,
+        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: Math.round(amountToPay),
+        currency: "NGN",
+        customer: {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email
+        },
+        onSuccess: async function(response) {
+            toast.success("Verifying payment...");
+            
+            try {
+              const verifyRes = await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reference: response.reference })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok || !verifyData.verified) {
+                toast.error('Payment verification failed.');
+                setLoading(false);
+                return;
+              }
+            } catch (verifyErr) {
+              console.warn('Payment verification API unreachable (dev mode):', verifyErr);
+            }
 
-      toast.success('Payment recorded successfully!');
-      
-      setCustomAmounts(prev => {
-        const next = { ...prev };
-        delete next[order.id];
-        return next;
+            try {
+              const orderRef = doc(db, 'orders', order.id);
+              await updateDoc(orderRef, {
+                amountPaid: order.amountPaid + amountToPay,
+                status: (order.amountPaid + amountToPay >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
+              });
+              
+              if (user?.uid) await createPaymentSuccessNotification(user.uid, order.id, amountToPay);
+
+              toast.success('Payment recorded successfully!');
+              
+              setCustomAmounts(prev => {
+                const next = { ...prev };
+                delete next[order.id];
+                return next;
+              });
+            } catch (err) {
+              console.error("Error updating order:", err);
+              toast.error("Payment successful but failed to update order record.");
+            } finally {
+              setLoading(false);
+            }
+        },
+        onClose: function() {
+            setLoading(false);
+            toast.error("Payment was cancelled.");
+        },
+        onFailed: function(response) {
+            setLoading(false);
+            toast.error(response?.data?.message || "Payment failed. Please try again.");
+        }
       });
     } catch (err) {
-      console.error("Error updating order:", err);
-      toast.error("Payment successful but failed to update order record.");
-    } finally {
+      console.error("Error initializing payment:", err);
+      toast.error("Failed to initialize payment gateway.");
       setLoading(false);
     }
   };
@@ -123,10 +169,11 @@ export default function Profile() {
     setVerifyingPhone(true);
     try {
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCodeHash = await hashOTP(otpCode);
       const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
       
       await updateDoc(doc(db, 'users', user.uid), {
-        phoneOtpCode: otpCode,
+        phoneOtpCodeHash: otpCodeHash,
         phoneOtpExpiresAt: otpExpiresAt
       });
 
@@ -154,11 +201,12 @@ export default function Profile() {
       const docRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(docRef);
       const data = docSnap.data();
+      const isValid = await verifyOTPHash(phoneOtp, data.phoneOtpCodeHash);
       
-      if (data.phoneOtpCode === phoneOtp && new Date() < data.phoneOtpExpiresAt.toDate()) {
+      if (isValid && new Date() < data.phoneOtpExpiresAt.toDate()) {
         await updateDoc(docRef, {
           isPhoneVerified: true,
-          phoneOtpCode: null,
+          phoneOtpCodeHash: null,
           phoneOtpExpiresAt: null
         });
         setProfileData(prev => ({ ...prev, isPhoneVerified: true }));

@@ -21,18 +21,18 @@ export default function Login() {
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      if (email === 'zealmart.ng@gmail.com') {
-        toast.success('Welcome back, Admin!');
-        navigate('/admin');
-        return;
-      }
-
       const userDocRef = doc(db, 'users', userCredential.user.uid);
       const userDocSnap = await getDoc(userDocRef);
       
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data();
+        
+        if (userData.isAdmin) {
+          toast.success('Welcome back, Admin!');
+          navigate('/admin');
+          return;
+        }
+
         if (userData.isEmailVerified === false) {
           await auth.signOut();
           setError('Please verify your email before logging in.');

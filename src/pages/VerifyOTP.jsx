@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
+import { hashOTP, verifyOTPHash } from '../utils/otpService';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
 
@@ -114,7 +115,9 @@ export default function VerifyOTP() {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      if (userData.otpCode !== enteredCode) {
+      const isValid = await verifyOTPHash(enteredCode, userData.otpCodeHash);
+
+      if (!isValid) {
         setError('Invalid OTP code.');
         toast.error('Invalid OTP code.');
         setLoading(false);
@@ -134,7 +137,7 @@ export default function VerifyOTP() {
       // Valid OTP
       await updateDoc(doc(db, 'users', userDoc.id), {
         isEmailVerified: true,
-        otpCode: null,
+        otpCodeHash: null,
         otpExpiresAt: null
       });
 
@@ -175,10 +178,11 @@ export default function VerifyOTP() {
       }
 
       const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const newOtpCodeHash = await hashOTP(newOtpCode);
       const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       await updateDoc(doc(db, 'users', userDoc.id), {
-        otpCode: newOtpCode,
+        otpCodeHash: newOtpCodeHash,
         otpExpiresAt: newExpiresAt
       });
 
