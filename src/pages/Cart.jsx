@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, CreditCard, ShoppingBag } from 'lucide-react';
-import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import useCartStore from '../store/useCartStore';
 import useAuthStore from '../store/useAuthStore';
@@ -231,12 +231,15 @@ export default function Cart() {
         if (!paymentProcessed) setLoading(false);
       }, 90000);
 
+      // Check if any items are installment payments (need tokenization)
+      const hasInstallments = items.some(i => i.paymentChoice === 'installment');
+
       window.Korapay.initialize({
         key: koraKey,
         reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         amount: Math.round(totalToPayNow),
         currency: "NGN",
-
+        ...(hasInstallments && { is_tokenized: true }),
         customer: {
             name: user.displayName || user.email.split('@')[0],
             email: user.email
@@ -246,6 +249,27 @@ export default function Cart() {
             paymentProcessed = true;
             clearTimeout(safetyTimer);
             setLoading(true);
+            toast.success("Verifying payment...");
+
+            // SECURITY: Verify payment server-side before creating order
+            try {
+              const verifyRes = await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reference: response.reference })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok || !verifyData.verified) {
+                toast.error('Payment could not be verified. Please contact support.');
+                setError('Payment verification failed. Reference: ' + response.reference);
+                setLoading(false);
+                return;
+              }
+            } catch (verifyErr) {
+              // If verification endpoint is unreachable (e.g. local dev), warn but continue
+              console.warn('Payment verification API unreachable, proceeding (dev mode):', verifyErr);
+            }
+
             toast.success("Payment verified! Processing order...");
             try {
               if (splitMode) {
@@ -339,8 +363,23 @@ export default function Cart() {
             toast.error(msg);
             setError(msg);
         },
-        onTokenized: function() {
-            // no-op: tokenized payments don't need extra handling
+        onTokenized: async function(response) {
+            // Save the payment token to the user's profile for future installment charges
+            try {
+              if (response?.data?.customer?.token) {
+                const tokenRef = doc(db, 'payment_tokens', user.uid);
+                await setDoc(tokenRef, {
+                  token: response.data.customer.token,
+                  email: user.email,
+                  provider: 'korapay',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+                console.log('Payment token saved for future installments');
+              }
+            } catch (tokenErr) {
+              console.error('Failed to save payment token:', tokenErr);
+            }
         }
       });
       setLoading(false);

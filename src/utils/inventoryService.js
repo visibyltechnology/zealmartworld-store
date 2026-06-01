@@ -1,4 +1,4 @@
-import { doc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 
 /**
@@ -57,29 +57,47 @@ export const updateInventoryStatus = async (productId, itemsLeft) => {
 };
 
 /**
- * Decrease product inventory
+ * Atomically decrease product inventory using a Firestore transaction.
+ * Prevents race conditions (two buyers purchasing the last item simultaneously).
  * @param {string} productId - Product ID
  * @param {number} quantity - Quantity to decrease
+ * @returns {Promise<number>} New stock level
  */
 export const decreaseInventory = async (productId, quantity = 1) => {
   try {
     const productRef = doc(db, 'products', productId);
-    const productSnap = await getDoc(productRef);
+    let newItems;
 
-    if (!productSnap.exists()) {
-      throw new Error('Product not found');
-    }
+    await runTransaction(db, async (transaction) => {
+      const productSnap = await transaction.get(productRef);
 
-    const product = productSnap.data();
-    // Skip inventory decrease for unlimited stock products
-    if (product.unlimited_stock) {
-      return product.items_left || 0;
-    }
+      if (!productSnap.exists()) {
+        throw new Error('Product not found');
+      }
 
-    const currentItems = product.items_left || 0;
-    const newItems = Math.max(0, currentItems - quantity);
+      const product = productSnap.data();
 
-    await updateInventoryStatus(productId, newItems);
+      // Skip for unlimited stock products
+      if (product.unlimited_stock) {
+        newItems = product.items_left || 0;
+        return;
+      }
+
+      const currentItems = product.items_left || 0;
+      if (currentItems < quantity) {
+        throw new Error(`Insufficient stock for "${product.name || productId}". Only ${currentItems} left.`);
+      }
+
+      newItems = currentItems - quantity;
+      const inventoryStatus = newItems <= 0 ? INVENTORY_STATUS.OUT_OF_STOCK : INVENTORY_STATUS.IN_STOCK;
+
+      transaction.update(productRef, {
+        items_left: newItems,
+        inventory_status: inventoryStatus,
+        updated_at: Timestamp.now()
+      });
+    });
+
     return newItems;
   } catch (error) {
     console.error('Error decreasing inventory:', error);

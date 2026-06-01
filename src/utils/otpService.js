@@ -17,23 +17,27 @@ export const generateOTP = () => {
 };
 
 /**
- * Hash OTP for secure storage (basic implementation)
- * In production, use bcrypt or similar
+ * Hash OTP using SHA-256 for secure storage
  * @param {string} otp - OTP to hash
- * @returns {string} Hashed OTP
+ * @returns {Promise<string>} Hex-encoded hash
  */
-export const hashOTP = (otp) => {
-  return btoa(otp);
+export const hashOTP = async (otp) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(otp);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 /**
- * Verify OTP hash
+ * Verify OTP against its SHA-256 hash
  * @param {string} otp - Plain OTP
- * @param {string} hash - Hashed OTP
- * @returns {boolean}
+ * @param {string} hash - SHA-256 hex hash
+ * @returns {Promise<boolean>}
  */
-export const verifyOTPHash = (otp, hash) => {
-  return hashOTP(otp) === hash;
+export const verifyOTPHash = async (otp, hash) => {
+  const computedHash = await hashOTP(otp);
+  return computedHash === hash;
 };
 
 /**
@@ -45,7 +49,7 @@ export const verifyOTPHash = (otp, hash) => {
 export const generateAndStoreOTP = async (email, type = 'registration') => {
   try {
     const otp = generateOTP();
-    const hashedOTP = hashOTP(otp);
+    const hashedOTP = await hashOTP(otp);
     const expiresAt = Timestamp.fromDate(
       new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000)
     );
@@ -105,7 +109,7 @@ export const verifyOTP = async (email, otp, type = 'registration') => {
     }
 
     // Verify OTP
-    if (!verifyOTPHash(otp, data.otp_hash)) {
+    if (!await verifyOTPHash(otp, data.otp_hash)) {
       // Increment attempts
       await updateDoc(otpDoc.ref, {
         attempts: data.attempts + 1
@@ -135,7 +139,7 @@ export const verifyOTP = async (email, otp, type = 'registration') => {
 export const generateDeliveryOTP = async (orderId, deliveryEmail) => {
   try {
     const otp = generateOTP();
-    const hashedOTP = hashOTP(otp);
+    const hashedOTP = await hashOTP(otp);
     const expiresAt = Timestamp.fromDate(
       new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000)
     );
@@ -195,7 +199,7 @@ export const verifyDeliveryOTP = async (orderId, otp) => {
     }
 
     // Verify OTP
-    if (!verifyOTPHash(otp, data.otp_hash)) {
+    if (!await verifyOTPHash(otp, data.otp_hash)) {
       await updateDoc(otpDoc.ref, {
         attempts: data.attempts + 1
       });
