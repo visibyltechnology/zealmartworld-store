@@ -7,9 +7,21 @@ const useAuthStore = create((set) => ({
   isAdmin: false,
   loading: true,
   init: () => {
-    onAuthStateChanged(auth, (user) => {
-      // Hardcode admin check for this specific email
-      const isAdmin = user?.email === 'zealmart.ng@gmail.com';
+    onAuthStateChanged(auth, async (user) => {
+      let isAdmin = false;
+      
+      if (user) {
+        try {
+          const { doc, getDoc } = await import('firebase/firestore');
+          const { db } = await import('../firebase');
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            isAdmin = userDoc.data().isAdmin === true;
+          }
+        } catch (err) {
+          console.error("Failed to fetch admin status", err);
+        }
+      }
       
       set({ 
         user, 
