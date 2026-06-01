@@ -209,9 +209,31 @@ export default function Cart() {
         return;
       }
 
-      // TEMPORARY BYPASS: Skip Korapay initialization for testing
-      const testResponse = { reference: `TEST_REF_${Date.now()}_${Math.floor(Math.random() * 1000)}` };
-      const onSuccess = async function(response) {
+      // Ensure Korapay script is loaded (handles race-condition on first load)
+      try {
+        await loadKorapayScript();
+      } catch {
+        toast.error('Could not load payment gateway. Check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (!window.Korapay) {
+        toast.error('Payment gateway failed to initialise. Please refresh and try again.');
+        setLoading(false);
+        return;
+      }
+
+      window.Korapay.initialize({
+        key: koraKey,
+        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: totalToPayNow,
+        currency: "NGN",
+        customer: {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email
+        },
+        onSuccess: async function(response) {
             toast.success("Payment verified! Processing order...");
             try {
               if (splitMode) {
@@ -292,10 +314,12 @@ export default function Cart() {
               setError("Payment successful but failed to save order. Please contact support.");
               setLoading(false);
             }
-      };
-      
-      // TEMPORARY BYPASS: Execute the success handler directly
-      await onSuccess(testResponse);
+        },
+        onClose: function() {
+            setLoading(false);
+            toast.error("Payment was cancelled.");
+        }
+      });
     } catch (err) {
       console.error("Error initializing payment:", err);
       setError("Failed to initialize payment gateway.");
@@ -655,7 +679,7 @@ export default function Cart() {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className="text-xs font-bold text-gray-400">1×</span>
                                   <span className="font-bold text-xs text-gray-800 truncate max-w-[150px] sm:max-w-xs">{unit.name}</span>
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">({unit.paymentChoice === 'full' ? 'Full' : `${unit.installments} ${unit.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}`})</span>
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">({unit.paymentChoice === 'full' ? 'Full' : `${unit.paymentFrequency === 'weekly' ? unit.installments * 4 : unit.installments} ${unit.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}`})</span>
                                 </div>
                                 
                                 <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
@@ -692,7 +716,7 @@ export default function Cart() {
                                         className="bg-white border border-gray-200 text-[10px] uppercase tracking-wider font-bold text-gray-700 rounded-sm px-2 py-1 outline-none focus:border-zeal-blue"
                                       >
                                         {[2,3,4,5,6].map(n => (
-                                          <option key={n} value={n}>{n} {unit.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}</option>
+                                          <option key={n} value={n}>{unit.paymentFrequency === 'weekly' ? n * 4 : n} {unit.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}</option>
                                         ))}
                                       </select>
                                     </>
@@ -737,7 +761,7 @@ export default function Cart() {
                             <span className="font-black text-sm text-gray-400 flex-shrink-0">{item.quantity}×</span>
                             <span className="font-bold text-sm text-gray-800 truncate">{item.name}</span>
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded-sm flex-shrink-0 whitespace-nowrap">
-                              {item.paymentChoice === 'full' ? 'Full' : `${item.installments} ${item.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}`}
+                              {item.paymentChoice === 'full' ? 'Full' : `${item.paymentFrequency === 'weekly' ? item.installments * 4 : item.installments} ${item.paymentFrequency === 'weekly' ? 'Wks' : 'Mos'}`}
                             </span>
                           </div>
                           <span className="font-black text-sm text-gray-900 flex-shrink-0">{fmt((item.paymentChoice === 'full' ? item.price : item.periodPayment || item.monthlyPayment) * item.quantity)}</span>

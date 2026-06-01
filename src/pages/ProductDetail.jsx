@@ -247,7 +247,7 @@ export default function ProductDetail() {
                           className={`w-12 h-12 rounded-sm font-black text-lg transition-all ${installments === n ? 'bg-zeal-blue text-white shadow-md transform -translate-y-0.5' : 'bg-white border border-gray-200 text-gray-600 hover:border-zeal-blue'}`}
                           onClick={() => setInstallments(n)}
                         >
-                          {n}
+                          {n * 4}
                         </button>
                       ))}
                     </div>

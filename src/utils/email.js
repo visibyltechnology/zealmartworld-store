@@ -107,17 +107,7 @@ async function _getOrderData(orderId) {
   return null;
 }
 
-/**
- * Build a plain-text bullet-list summary for all items in an order.
- *
- * Example output (used as {{items_summary}} in your EmailJS template):
- *   • Samsung 65" QLED 4K TV — Qty: 1 | ₦450,000 (Full Payment)
- *   • iPhone 15 Pro (256GB) — Qty: 2 | ₦32,500/mo × 6 months
- *
- * @param {Array} items  — order.items array from Firestore
- * @returns {string}
- */
-function _buildItemsSummary(items = []) {
+function _buildItemsSummaryText(items = []) {
   if (!items.length) return 'No items found.';
 
   return items.map(item => {
@@ -140,6 +130,60 @@ function _buildItemsSummary(items = []) {
 
     return `• ${name} — Qty: ${qty} | ${pricePart}`;
   }).join('\n');
+}
+
+/**
+ * Build a rich HTML table summary for all items in an order.
+ * Used as {{{items_summary}}} in the EmailJS template.
+ */
+function _buildItemsSummaryHtml(items = []) {
+  if (!items.length) return '<p>No items found.</p>';
+
+  const rows = items.map(item => {
+    const qty    = item.quantity || 1;
+    const name   = item.name || 'Product';
+    const image  = item.img || item.image || 'https://via.placeholder.com/80';
+    const condition = item.condition || 'New';
+
+    let pricePart;
+    if (item.paymentChoice === 'installment') {
+      const periodAmt  = item.periodPayment || item.monthlyPayment || 0;
+      const periods    = item.installments  || 0;
+      const freq       = item.paymentFrequency === 'weekly' ? 'wk' : 'mo';
+      const totalPds   = item.paymentFrequency === 'weekly' ? periods * 4 : periods;
+      const formatted  = '₦' + Math.ceil(periodAmt * qty).toLocaleString('en-NG');
+      pricePart = `${formatted}/${freq} × ${totalPds} ${freq === 'wk' ? 'weeks' : 'months'}`;
+    } else {
+      const total   = (item.price || 0) * qty;
+      const formatted = '₦' + Math.ceil(total).toLocaleString('en-NG');
+      pricePart = `${formatted} (Full Payment)`;
+    }
+
+    return `
+      <tr>
+        <td style="padding: 16px 0; border-bottom: 1px solid #333333;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td width="80" style="padding-right: 20px; vertical-align: top;">
+                <img src="${image}" alt="${name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #333333;" />
+              </td>
+              <td style="vertical-align: top;">
+                <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #ffffff; font-family: Arial, sans-serif;">${name}</p>
+                <p style="margin: 0 0 6px 0; font-size: 13px; color: #8b949e; font-family: Arial, sans-serif;">
+                  Qty: <strong style="color:#ffffff;">${qty}</strong> 
+                  <span style="margin: 0 6px;">|</span> 
+                  Quality/Condition: <strong style="color:#ffffff;">${condition}</strong>
+                </p>
+                <p style="margin: 0; font-size: 14px; color: #22c55e; font-weight: 600; font-family: Arial, sans-serif;">${pricePart}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">${rows}</table>`;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -191,7 +235,8 @@ export async function sendOrderOTPEmail(userId, orderId, otpCode) {
   // Fetch order to get items + delivery address
   const orderData     = await _getOrderData(orderId);
   const items         = orderData?.items || [];
-  const itemsSummary  = _buildItemsSummary(items);
+  const itemsSummaryHtml = _buildItemsSummaryHtml(items);
+  const itemsSummaryText = _buildItemsSummaryText(items);
   const itemCount     = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
   const deliveryAddr  = orderData?.deliveryInfo
     ? `${orderData.deliveryInfo.address || ''}, ${orderData.deliveryInfo.city || ''}, ${orderData.deliveryInfo.state || ''}`.replace(/^,\s*|,\s*$/g, '')
@@ -207,7 +252,7 @@ export async function sendOrderOTPEmail(userId, orderId, otpCode) {
       delivery_code:    otpCode,
       otp:              otpCode,
       code:             otpCode,
-      items_summary:    itemsSummary,
+      items_summary:    itemsSummaryHtml,
       item_count:       itemCount,
       delivery_address: deliveryAddr,
       message:          `Your order is out for delivery. When the courier arrives, give them this code: ${otpCode}`,
@@ -224,7 +269,7 @@ export async function sendOrderOTPEmail(userId, orderId, otpCode) {
       name,
       otp:  otpCode,
       code: otpCode,
-      message: `🚚 Delivery code for order #${orderId}: ${otpCode}\n\nItems:\n${itemsSummary}`,
+      message: `🚚 Delivery code for order #${orderId}: ${otpCode}\n\nItems:\n${itemsSummaryText}`,
     });
   }
   return sent;
@@ -267,7 +312,8 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
   // Fetch order to build items summary
   const orderData    = await _getOrderData(orderId);
   const items        = orderData?.items || [];
-  const itemsSummary = _buildItemsSummary(items);
+  const itemsSummaryHtml = _buildItemsSummaryHtml(items);
+  const itemsSummaryText = _buildItemsSummaryText(items);
   const itemCount    = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
   const deliveryAddr = orderData?.deliveryInfo
     ? `${orderData.deliveryInfo.address || ''}, ${orderData.deliveryInfo.city || ''}, ${orderData.deliveryInfo.state || ''}`.replace(/^,\s*|,\s*$/g, '')
@@ -283,7 +329,7 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
       tracking_status:    status,
       status_label:       statusLabel,
       notes:              notes || `Your order status has been updated to: ${statusLabel}`,
-      items_summary:      itemsSummary,
+      items_summary:      itemsSummaryHtml,
       item_count:         itemCount,
       delivery_address:   deliveryAddr,
       estimated_delivery: status === 'Shipped' ? 'Within 1–3 business days' : '',
@@ -302,7 +348,7 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
       name,
       otp:  '',
       code: '',
-      message: `📦 Order #${orderId} — ${statusLabel}${notes ? '\n' + notes : ''}\n\nItems:\n${itemsSummary}`,
+      message: `📦 Order #${orderId} — ${statusLabel}${notes ? '\n' + notes : ''}\n\nItems:\n${itemsSummaryText}`,
     });
   }
   return sent;
@@ -315,6 +361,20 @@ export async function sendOrderDeliveredEmail(userId, orderId) {
   return sendTrackingUpdateEmail(userId, orderId, 'Delivered');
 }
 
+/**
+ * Send password reset success email.
+ */
+export async function sendPasswordResetSuccessEmail(toEmail, name) {
+  return _send(TEMPLATES.OTP, {
+    to_email: toEmail,
+    email:    toEmail,
+    name,
+    otp:      '',
+    code:     '',
+    message:  'Your password has been successfully reset. If you did not make this change, please contact support immediately.',
+  });
+}
+
 // ─── Default export ───────────────────────────────────────────────────────────
 
 export default {
@@ -324,4 +384,5 @@ export default {
   sendOrderOTPEmail,
   sendTrackingUpdateEmail,
   sendOrderDeliveredEmail,
+  sendPasswordResetSuccessEmail,
 };

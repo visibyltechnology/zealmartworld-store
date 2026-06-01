@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
+import { sendPasswordResetSuccessEmail } from '../utils/email';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -79,6 +80,7 @@ export default function ResetPassword() {
       });
 
       if (response.data.success) {
+        sendPasswordResetSuccessEmail(email, 'Customer').catch(console.error);
         toast.success('Password successfully reset! You can now log in.');
         navigate('/login');
       }
