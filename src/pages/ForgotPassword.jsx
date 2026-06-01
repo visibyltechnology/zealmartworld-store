@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { Link } from 'react-router-dom';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../firebase';
 import Footer from '../components/Footer';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { sendForgotPasswordOTPEmail } from '../utils/email';
 
 export default function ForgotPassword() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -20,54 +18,43 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      // 1. Check if user exists in Firestore
-      const q = query(collection(db, 'users'), where('email', '==', email));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setError('No account found with this email address.');
-        toast.error('No account found.');
-        setLoading(false);
-        return;
-      }
-
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
-
-      // 2. Generate OTP
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-      // 3. Save OTP to Firestore
-      await updateDoc(doc(db, 'users', userDoc.id), {
-        resetOtp: otpCode,
-        resetOtpExpiresAt: otpExpiresAt
+      await sendPasswordResetEmail(auth, email, {
+        url: window.location.origin + '/login',
       });
-
-      // 4. Send via EmailJS using our centralized service
-      try {
-        await sendForgotPasswordOTPEmail(
-          email,
-          userData.firstName || 'Customer',
-          otpCode
-        );
-      } catch (emailErr) {
-        console.error('EmailJS error:', emailErr);
-        // We continue even if EmailJS fails, because WhatsApp might have succeeded
-      }
-
-      // Redirect to Verify Reset OTP page
-      toast.success('Password reset code sent!');
-      navigate(`/reset-password?email=${encodeURIComponent(email)}`);
-
+      setEmailSent(true);
+      toast.success('Password reset email sent!');
     } catch (err) {
       console.error(err);
-      setError('Failed to process reset request. Please try again.');
-      toast.error('Failed to send reset code.');
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found with this email address.');
+      } else {
+        setError('Failed to send reset email. Please try again.');
+      }
+      toast.error('Failed to send reset link.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (emailSent) {
+    return (
+      <main className="min-h-screen flex flex-col">
+        <div className="flex-grow bg-gray-50 flex items-center justify-center py-16 px-4">
+          <div className="w-full max-w-md bg-white border border-gray-200 shadow-lg rounded-sm overflow-hidden text-center py-12 px-8">
+            <CheckCircle className="mx-auto text-green-500 mb-4" size={64} />
+            <h2 className="text-2xl font-black uppercase tracking-wide font-display text-gray-900 mb-2">Check Your Email</h2>
+            <p className="text-gray-600 font-medium mb-8">
+              We've sent a password reset link to <strong>{email}</strong>. Please click the link in that email to create a new password.
+            </p>
+            <Link to="/login" className="w-full inline-block bg-zeal-red hover:bg-red-800 text-white font-black py-4 rounded-sm uppercase tracking-widest text-sm transition-all shadow-md hover:shadow-lg">
+              Return to Login
+            </Link>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
 
   // emailSent state is no longer used since we navigate directly to /reset-password
   return (
