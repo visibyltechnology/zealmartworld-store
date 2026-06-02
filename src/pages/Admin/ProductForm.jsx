@@ -47,11 +47,7 @@ export default function ProductForm() {
     items_left: 0,
     unlimited_stock: false,
     inventory_status: 'in_stock',
-    is_hidden: false,
-    condition: 'New',
-    ram: '',
-    storage: '',
-    os: ''
+    is_hidden: false
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -177,10 +173,6 @@ export default function ProductForm() {
         unlimited_stock: formData.unlimited_stock || false,
         inventory_status: formData.unlimited_stock ? 'in_stock' : (Number(formData.items_left || 0) === 0 ? 'out_of_stock' : (formData.inventory_status || 'in_stock')),
         is_hidden: Boolean(formData.is_hidden),
-        condition: formData.condition || 'New',
-        ram: formData.ram || '',
-        storage: formData.storage || '',
-        os: formData.os || '',
         updatedAt: new Date()
       };
 
@@ -454,87 +446,6 @@ export default function ProductForm() {
                   )}
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>Leave empty if no sale</p>
-              </FieldGroup>
-            </div>
-
-            {/* Technical Specifications (Optional) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <FieldGroup label="Condition" icon={<Tag size={14} />} accent="#fb923c">
-                <div style={{ position: 'relative' }}>
-                  <select
-                    name="condition" value={formData.condition} onChange={handleChange}
-                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none' }}
-                    onFocus={e => { e.target.style.borderColor = '#fb923c'; e.target.style.boxShadow = '0 0 0 3px rgba(251,146,60,0.12)'; }}
-                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                  >
-                    <option value="New">Brand New</option>
-                    <option value="Refurbished">Refurbished / UK Used</option>
-                    <option value="Used">Used</option>
-                  </select>
-                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
-                </div>
-              </FieldGroup>
-
-              <FieldGroup label="Operating System" icon={<Sparkles size={14} />} accent="#06b6d4">
-                <div style={{ position: 'relative' }}>
-                  <select
-                    name="os" value={formData.os} onChange={handleChange}
-                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none' }}
-                    onFocus={e => { e.target.style.borderColor = '#06b6d4'; e.target.style.boxShadow = '0 0 0 3px rgba(6,182,212,0.12)'; }}
-                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                  >
-                    <option value="">None / Not Applicable</option>
-                    <option value="iOS">iOS</option>
-                    <option value="Android">Android</option>
-                    <option value="Windows">Windows</option>
-                    <option value="macOS">macOS</option>
-                    <option value="Linux">Linux</option>
-                  </select>
-                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
-                </div>
-              </FieldGroup>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <FieldGroup label="RAM (Memory)" icon={<Tag size={14} />} accent="#8b5cf6">
-                <div style={{ position: 'relative' }}>
-                  <select
-                    name="ram" value={formData.ram} onChange={handleChange}
-                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none' }}
-                    onFocus={e => { e.target.style.borderColor = '#8b5cf6'; e.target.style.boxShadow = '0 0 0 3px rgba(139,92,246,0.12)'; }}
-                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                  >
-                    <option value="">None / Not Applicable</option>
-                    <option value="4GB">4GB</option>
-                    <option value="6GB">6GB</option>
-                    <option value="8GB">8GB</option>
-                    <option value="12GB">12GB</option>
-                    <option value="16GB">16GB</option>
-                    <option value="32GB">32GB</option>
-                    <option value="64GB">64GB</option>
-                  </select>
-                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
-                </div>
-              </FieldGroup>
-
-              <FieldGroup label="Storage Capacity" icon={<Tag size={14} />} accent="#ec4899">
-                <div style={{ position: 'relative' }}>
-                  <select
-                    name="storage" value={formData.storage} onChange={handleChange}
-                    style={{ ...inputStyle, paddingLeft: 16, cursor: 'pointer', appearance: 'none' }}
-                    onFocus={e => { e.target.style.borderColor = '#ec4899'; e.target.style.boxShadow = '0 0 0 3px rgba(236,72,153,0.12)'; }}
-                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                  >
-                    <option value="">None / Not Applicable</option>
-                    <option value="64GB">64GB</option>
-                    <option value="128GB">128GB</option>
-                    <option value="256GB">256GB</option>
-                    <option value="512GB">512GB</option>
-                    <option value="1TB">1TB</option>
-                    <option value="2TB">2TB</option>
-                  </select>
-                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
-                </div>
               </FieldGroup>
             </div>
 

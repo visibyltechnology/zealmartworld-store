@@ -160,7 +160,7 @@ export default function Shop() {
         const matchMinPrice = minPrice === '' || pPrice >= Number(minPrice);
         const matchMaxPrice = maxPrice === '' || pPrice <= Number(maxPrice);
         
-        const matchCondition = condition === 'All' || p.condition === condition;
+        const matchCondition = condition === 'All' || p.condition === condition || (p.name && p.name.includes(condition)) || (p.description && p.description.includes(condition));
         
         const matchRam = activeRam === 'All' || p.ram === activeRam || (p.name && p.name.includes(activeRam)) || (p.description && p.description.includes(activeRam));
         const matchStorage = activeStorage === 'All' || p.storage === activeStorage || (p.name && p.name.includes(activeStorage)) || (p.description && p.description.includes(activeStorage));
