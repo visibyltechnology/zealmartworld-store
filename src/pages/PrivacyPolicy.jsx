@@ -181,8 +181,8 @@ export default function PrivacyPolicy() {
                   <p className="mb-3">For any questions about this Privacy Policy or your personal data, contact our Data Protection Officer:</p>
                   <ul className="space-y-1.5 text-sm font-medium">
                     <li><i className="fas fa-envelope mr-2 text-zeal-blue"></i><strong>Email:</strong> support@zealmartworld.com.ng</li>
-                    <li><i className="fas fa-phone mr-2 text-zeal-blue"></i><strong>Phone:</strong> +234 ...</li>
-                    <li><i className="fas fa-map-marker-alt mr-2 text-zeal-blue"></i><strong>Address:</strong> Nigeria</li>
+                    <li><i className="fas fa-phone mr-2 text-zeal-blue"></i><strong>Phone:</strong> +234 806 891 6694</li>
+                    <li><i className="fas fa-map-marker-alt mr-2 text-zeal-blue"></i><strong>Address:</strong> 77 Olu-Obasanjo Road Port Harcourt, Rivers State, Nigeria</li>
                   </ul>
                 </>
               )

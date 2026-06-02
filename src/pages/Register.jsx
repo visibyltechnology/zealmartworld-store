@@ -88,17 +88,7 @@ export default function Register() {
         createdAt: new Date()
       });
 
-      try {
-        // Send OTP via WhatsApp
-        await addDoc(collection(db, 'otp_requests'), {
-          phone: finalPhone,
-          otpCode: otpCode, // send plain code via WhatsApp, never persist it
-          status: 'pending',
-          createdAt: serverTimestamp()
-        });
-      } catch (waErr) {
-        console.error("WhatsApp OTP error:", waErr);
-      }
+
 
         try {
           const sent = await sendRegistrationOTPEmail(

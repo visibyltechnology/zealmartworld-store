@@ -27,17 +27,15 @@ export default function Footer() {
                         <ul className="space-y-3 text-sm font-medium">
                             <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Shop Categories</Link></li>
                             <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Deal of the Day</Link></li>
-                            <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Track Your Order</Link></li>
                         </ul>
                     </div>
 
                     <div>
                         <h4 className="text-white font-black text-sm mb-6 uppercase tracking-widest border-b border-gray-800 pb-3">Customer Service</h4>
                         <ul className="space-y-3 text-sm font-medium">
-                            <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Contact Us</Link></li>
-                            <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Returns & Exchanges</Link></li>
+                            <li><a href="https://wa.me/2348068916694?text=Contact%20Us" target="_blank" rel="noreferrer" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Contact Us</a></li>
+                            <li><a href="https://wa.me/2348068916694?text=Returns%20%26%20Exchanges" target="_blank" rel="noreferrer" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Returns & Exchanges</a></li>
                             <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Delivery Information</Link></li>
-                            <li><Link to="#" className="hover:text-white hover:translate-x-1 transition-all flex items-center"><i className="fas fa-angle-right mr-2 text-zeal-red"></i> Payment Methods</Link></li>
                         </ul>
                     </div>
 
@@ -46,7 +44,7 @@ export default function Footer() {
                         <ul className="space-y-4 text-sm font-medium">
                             <li className="flex items-start">
                                 <i className="fas fa-map-marker-alt mt-1 mr-3 text-zeal-red text-lg"></i>
-                                <span>14 Electronics Avenue,<br />Victoria Island, Lagos,<br />Nigeria.</span>
+                                <span>Rivers State<br />Port Harcourt<br />77 Olu-Obasanjo Road,<br />Adjacent to energymatic Filling station<br />24. 09 75.</span>
                             </li>
                             <li className="flex items-center">
                                 <div className="flex items-start gap-4 transform transition-transform hover:-translate-y-1">
@@ -54,7 +52,7 @@ export default function Footer() {
                                 <div>
                                     <h4 className="font-bold text-white uppercase text-sm">Bulk Orders via WhatsApp</h4>
                                     <p className="text-xs text-gray-400 mt-1">Contact us on WhatsApp for wholesale & bulk order pricing.</p>
-                                    <a href="https://wa.me/2340000000000" target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-bold text-green-400 hover:text-green-300 transition-colors">
+                                    <a href="https://wa.me/2348068916694" target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-bold text-green-400 hover:text-green-300 transition-colors">
                                         Chat Now <i className="fas fa-arrow-right ml-1"></i>
                                     </a>
                                 </div>

@@ -2,7 +2,7 @@ const deliveryZones = {
   intrastate: {
     // Local state (Minimum threshold applied)
     states: ["Rivers"],
-    price: 5000,
+    price: 10000,
     duration: "5 - 6 Days"
   },
   neighboringRegional: {
@@ -11,13 +11,13 @@ const deliveryZones = {
       "Abia", "Akwa Ibom", "Anambra", "Bayelsa", "Cross River", 
       "Delta", "Ebonyi", "Edo", "Enugu", "Imo"
     ],
-    price: 6000,
+    price: 12000,
     duration: "5 - 7 Days"
   },
   southWest: {
     // South-West (Your 7k Baseline)
     states: ["Ekiti", "Lagos", "Ogun", "Ondo", "Osun", "Oyo"],
-    price: 7000, 
+    price: 14000, 
     duration: "5 - 7 Days"
   },
   middleBelt: {
@@ -26,7 +26,7 @@ const deliveryZones = {
       "Benue", "Federal Capital Territory", "Kogi", "Kwara", 
       "Nassarawa", "Niger", "Plateau"
     ],
-    price: 8500,
+    price: 16000,
     duration: "7 - 9 Days"
   },
   farNorth: {
@@ -35,7 +35,7 @@ const deliveryZones = {
       "Adamawa", "Bauchi", "Borno", "Gombe", "Jigawa", "Kaduna", "Kano", 
       "Katsina", "Kebbi", "Sokoto", "Taraba", "Yobe", "Zamfara"
     ],
-    price: 10000,
+    price: 18000,
     duration: "8 - 12 Days"
   }
 };
@@ -57,5 +57,5 @@ export const getDeliveryDetails = (stateName) => {
   }
   
   // Fallback default (Matches your new minimums)
-  return { price: 5000, duration: "5 - 7 Days", currency: "NGN" };
+  return { price: 10000, duration: "5 - 7 Days", currency: "NGN" };
 };

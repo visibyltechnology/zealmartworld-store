@@ -53,7 +53,7 @@ export default function Cart() {
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
   const [phoneOtp, setPhoneOtp] = useState('');
   const [verifyingPhone, setVerifyingPhone] = useState(false);
-  const [phoneVerifiedForCart, setPhoneVerifiedForCart] = useState(true);
+  const phoneVerifiedForCart = true;
   const [saveNewAddress, setSaveNewAddress] = useState(false);
 
   useEffect(() => {
@@ -81,14 +81,7 @@ export default function Cart() {
     fetchUserData();
   }, [user]);
 
-  // Check if phone changed
-  useEffect(() => {
-    if (profileData?.phone && deliveryInfo.phone && deliveryInfo.phone !== profileData.phone) {
-      setPhoneVerifiedForCart(false);
-    } else if (deliveryInfo.phone === profileData?.phone && profileData?.isPhoneVerified) {
-      setPhoneVerifiedForCart(true);
-    }
-  }, [deliveryInfo.phone, profileData]);
+
   const [showPreview, setShowPreview] = useState(false);
   const [conflictDismissed, setConflictDismissed] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
@@ -597,9 +590,7 @@ export default function Cart() {
                 <div>
                   <input id="delivery-phone" name="phone" type="tel" autoComplete="tel" placeholder="WhatsApp Number (e.g. +234...)" value={deliveryInfo.phone} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, phone: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors" />
                   <span className="text-[10px] font-bold text-gray-500 mt-1 block uppercase tracking-wider">Required for WhatsApp delivery updates. Please include country code (+234).</span>
-                  {!phoneVerifiedForCart && deliveryInfo.phone && (
-                    <span className="text-[10px] font-bold text-amber-600 mt-1 block uppercase tracking-wider"><i className="fas fa-exclamation-triangle"></i> This new number will need to be verified.</span>
-                  )}
+
                 </div>
                 <textarea id="delivery-instructions" name="instructions" autoComplete="off" placeholder="Additional Instructions (Optional)" value={deliveryInfo.instructions} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-sm font-medium rounded-sm px-4 py-2.5 outline-none focus:border-zeal-blue transition-colors resize-y min-h-[80px]"></textarea>
               </div>
@@ -656,35 +647,7 @@ export default function Cart() {
                   }
                   setError('');
 
-                  if (!phoneVerifiedForCart) {
-                    // Trigger OTP send
-                    setVerifyingPhone(true);
-                    try {
-                      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-                      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-                      
-                      await updateDoc(doc(db, 'users', user.uid), {
-                        cartPhoneOtpCode: otpCode,
-                        cartPhoneOtpExpiresAt: otpExpiresAt
-                      });
 
-                      await addDoc(collection(db, 'otp_requests'), {
-                        phone: deliveryInfo.phone,
-                        otpCode: otpCode,
-                        status: 'pending',
-                        createdAt: serverTimestamp()
-                      });
-                      
-                      toast.success('Verification code sent to the new number via WhatsApp!');
-                      setShowPhoneVerify(true);
-                    } catch (err) {
-                      console.error(err);
-                      toast.error('Failed to send verification code to new number');
-                    } finally {
-                      setVerifyingPhone(false);
-                    }
-                    return;
-                  }
 
                   if (saveNewAddress) {
                     try {
@@ -992,87 +955,7 @@ export default function Cart() {
         }
         return null;
       })()}
-      {/* Phone OTP Verification Modal */}
-      {showPhoneVerify && (
-        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-sm w-full max-w-sm p-6 shadow-2xl relative overflow-hidden">
-            <h3 className="text-lg font-black text-gray-900 mb-2">Verify Phone Number</h3>
-            <p className="text-sm text-gray-500 font-medium mb-6">Enter the 6-digit OTP sent to {deliveryInfo.phone}.</p>
-            
-            <div className="mb-6">
-              <input 
-                type="text" 
-                value={phoneOtp}
-                onChange={(e) => setPhoneOtp(e.target.value)}
-                placeholder="123456"
-                maxLength="6"
-                className="w-full border border-gray-300 rounded-sm px-4 py-3 text-center text-xl font-bold tracking-widest focus:border-zeal-blue outline-none"
-              />
-            </div>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setShowPhoneVerify(false)}
-                className="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-sm hover:bg-gray-50 transition-colors uppercase text-xs"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={async () => {
-                  if (!phoneOtp) return;
-                  setVerifyingPhone(true);
-                  try {
-                    const docRef = doc(db, 'users', user.uid);
-                    const docSnap = await getDoc(docRef);
-                    const data = docSnap.data();
-                    
-                    if (data.cartPhoneOtpCode === phoneOtp && new Date() < data.cartPhoneOtpExpiresAt.toDate()) {
-                      await updateDoc(docRef, {
-                        cartPhoneOtpCode: null,
-                        cartPhoneOtpExpiresAt: null
-                      });
-                      setPhoneVerifiedForCart(true);
-                      setShowPhoneVerify(false);
-                      setPhoneOtp('');
-                      toast.success('Phone number verified successfully!');
-                      
-                      // Auto-save address if checked
-                      if (saveNewAddress) {
-                        const newAddr = {
-                          address: deliveryInfo.address,
-                          city: deliveryInfo.city,
-                          state: deliveryInfo.state,
-                          landmark: deliveryInfo.landmark || '',
-                          phone: deliveryInfo.phone
-                        };
-                        const updatedAddresses = [...savedAddresses, newAddr].slice(0, 3);
-                        await updateDoc(docRef, {
-                          savedAddresses: updatedAddresses
-                        });
-                        setSavedAddresses(updatedAddresses);
-                        setSaveNewAddress(false);
-                      }
-                      
-                      setShowPreview(true);
-                    } else {
-                      toast.error('Invalid or expired OTP');
-                    }
-                  } catch (err) {
-                    console.error(err);
-                    toast.error('Verification failed');
-                  } finally {
-                    setVerifyingPhone(false);
-                  }
-                }}
-                disabled={verifyingPhone || phoneOtp.length !== 6}
-                className="flex-1 bg-zeal-red text-white font-bold py-2.5 rounded-sm hover:bg-red-800 transition-colors uppercase text-xs disabled:opacity-50"
-              >
-                {verifyingPhone ? 'Verifying...' : 'Verify & Continue'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </main>
   );
 }

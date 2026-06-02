@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, where, onSnapshot, limit, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
+import useCartStore from '../store/useCartStore';
 
 const DEFAULT_SLIDES = [
     {
@@ -27,7 +28,7 @@ const DEFAULT_SLIDES = [
         subtitle: "Inverter ACs built for maximum cooling and low energy consumption.",
         buttonText: "Shop Air Conditioners",
         link: "/products?cat=Air%20Conditioners",
-        image: "https://images.pexels.com/photos/2581274/pexels-photo-2581274.jpeg?auto=format&fit=crop&w=1920&q=80"
+        image: "https://www.theheatpumppeople.co.nz/split-system-air-conditioner"
     },
     {
         id: 4,
@@ -84,6 +85,7 @@ export default function Home() {
     const [slides, setSlides] = useState(DEFAULT_SLIDES);
     const [currentSlide, setCurrentSlide] = useState(0);
     const navigate = useNavigate();
+    const addToCart = useCartStore(state => state.addToCart);
 
     // Auto-advance carousel
     useEffect(() => {
@@ -108,7 +110,7 @@ export default function Home() {
         const q = query(collection(db, "products"), where("featured", "==", true), limit(12));
         const unsubscribeProducts = onSnapshot(q, (snap) => {
             let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
+
             if (items.length > 0) {
                 items.sort((a, b) => {
                     const posA = a.featuredPosition ?? Infinity;
@@ -144,9 +146,9 @@ export default function Home() {
 
     return (
         <main className="bg-gray-50 flex-grow">
-            
+
             {/* WhatsApp Floating Button */}
-            <a href="https://wa.me/2340000000000" target="_blank" rel="noreferrer"
+            <a href="https://wa.me/2348068916694" target="_blank" rel="noreferrer"
                 className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform duration-300">
                 <i className="fab fa-whatsapp text-3xl"></i>
             </a>
@@ -154,29 +156,29 @@ export default function Home() {
             {/* Giant 7-Slide Hero Carousel */}
             <div className="relative bg-zeal-dark text-white overflow-hidden h-[500px] md:h-[600px] group">
                 {slides.map((slide, index) => (
-                    <div 
+                    <div
                         key={index}
                         className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                     >
-                        <img 
-                            src={slide.image} 
-                            alt={slide.title} 
-                            className={`absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50 transform transition-transform duration-[10000ms] ${index === currentSlide ? 'scale-110' : 'scale-100'}`} 
+                        <img
+                            src={slide.image}
+                            alt={slide.title}
+                            className={`absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50 transform transition-transform duration-[10000ms] ${index === currentSlide ? 'scale-110' : 'scale-100'}`}
                         />
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full relative z-20 flex flex-col justify-center">
                             <div className="max-w-2xl transform transition-all duration-1000 translate-y-0 opacity-100">
                                 <span className="inline-block bg-zeal-red text-white text-xs font-black uppercase tracking-widest px-3 py-1 mb-4 border border-red-500 animate-fade-in-up">
                                     Authorized Dealer
                                 </span>
-                                <h1 className="text-5xl md:text-7xl font-display font-black leading-tight mb-4 text-white uppercase tracking-tight drop-shadow-lg animate-fade-in-up" style={{animationDelay: '100ms'}}>
+                                <h1 className="text-5xl md:text-7xl font-display font-black leading-tight mb-4 text-white uppercase tracking-tight drop-shadow-lg animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                     {slide.title}
                                 </h1>
-                                <p className="text-lg md:text-xl text-gray-200 mb-8 font-medium drop-shadow animate-fade-in-up" style={{animationDelay: '200ms'}}>
+                                <p className="text-lg md:text-xl text-gray-200 mb-8 font-medium drop-shadow animate-fade-in-up" style={{ animationDelay: '200ms' }}>
                                     {slide.subtitle}
                                 </p>
-                                <div className="animate-fade-in-up" style={{animationDelay: '300ms'}}>
-                                    <Link 
-                                        to={slide.link} 
+                                <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+                                    <Link
+                                        to={slide.link}
                                         className="inline-block bg-zeal-red hover:bg-white hover:text-zeal-red border-2 border-transparent hover:border-zeal-red text-white font-bold py-4 px-10 rounded-sm transition-all duration-300 flex-none shadow-[0_0_15px_rgba(230,22,1,0.5)] hover:shadow-[0_0_25px_rgba(230,22,1,0.8)] uppercase tracking-wide transform hover:-translate-y-1"
                                     >
                                         {slide.buttonText} <i className="fas fa-chevron-right ml-2 text-xs"></i>
@@ -186,15 +188,15 @@ export default function Home() {
                         </div>
                     </div>
                 ))}
-                
+
                 {/* Carousel Controls */}
-                <button 
+                <button
                     onClick={() => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))}
                     className="absolute left-4 top-1/2 -translate-y-1/2 z-30 bg-black/30 hover:bg-zeal-red text-white w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
                 >
                     <i className="fas fa-chevron-left"></i>
                 </button>
-                <button 
+                <button
                     onClick={() => setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1))}
                     className="absolute right-4 top-1/2 -translate-y-1/2 z-30 bg-black/30 hover:bg-zeal-red text-white w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
                 >
@@ -204,7 +206,7 @@ export default function Home() {
                 {/* Carousel Indicators */}
                 <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center space-x-2">
                     {slides.map((_, idx) => (
-                        <button 
+                        <button
                             key={idx}
                             onClick={() => setCurrentSlide(idx)}
                             className={`h-2 transition-all duration-300 rounded-full ${idx === currentSlide ? 'w-8 bg-zeal-red' : 'w-2 bg-white/50'}`}
@@ -257,7 +259,7 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Link to="/products?cat=Air%20Conditioners" className="group relative h-64 bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl transition-all">
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-                        <img src="https://images.pexels.com/photos/2581274/pexels-photo-2581274.jpeg?w=500&q=80" alt="ACs" className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" />
+                        <img src="https://lirp.cdn-website.com/eb0d1dad/dms3rep/multi/opt/Split+system+Air+Conditioner-640w.jpg" alt="ACs" className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" />
                         <div className="absolute bottom-0 left-0 w-full p-6 z-20">
                             <span className="text-zeal-red font-bold text-sm uppercase tracking-wider block mb-1">Cooling</span>
                             <h3 className="text-white font-display font-black text-2xl uppercase">Air Conditioners</h3>
@@ -266,7 +268,7 @@ export default function Home() {
                             </span>
                         </div>
                     </Link>
-                    
+
                     <Link to="/products?cat=Televisions" className="group relative h-64 bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl transition-all">
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
                         <img src="https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg?w=500&q=80" alt="TVs" className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" />
@@ -313,10 +315,10 @@ export default function Home() {
                         ))
                     ) : (
                         featured.map((p, idx) => (
-                            <div key={p.id} 
+                            <div key={p.id}
                                 onClick={() => navigate(`/products/${p.id}`)}
                                 className="product-card-container relative group cursor-pointer flex flex-col h-full rounded bg-white overflow-hidden animate-fade-in-up"
-                                style={{animationDelay: `${idx * 100}ms`}}
+                                style={{ animationDelay: `${idx * 100}ms` }}
                             >
                                 <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
                                     {p.featured && (
@@ -330,11 +332,11 @@ export default function Home() {
                                         </span>
                                     )}
                                 </div>
-                                
+
                                 <div className="relative p-4 h-56 flex items-center justify-center border-b border-gray-100 bg-white overflow-hidden">
                                     <img src={p.img} alt={p.name} className="max-w-full max-h-full object-contain transform group-hover:scale-110 transition-transform duration-500" />
                                 </div>
-                                
+
                                 <div className="p-4 flex flex-col flex-grow">
                                     <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                         {p.brand || p.category}
@@ -342,7 +344,7 @@ export default function Home() {
                                     <h3 className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-2 mb-3 group-hover:text-zeal-blue transition-colors">
                                         {p.name}
                                     </h3>
-                                    
+
                                     <div className="mt-auto">
                                         <div className="mb-3">
                                             <span className="text-xl font-display font-black text-zeal-red block">
@@ -354,8 +356,11 @@ export default function Home() {
                                                 </span>
                                             )}
                                         </div>
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); navigate(`/products/${p.id}`); }}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addToCart(p);
+                                            }}
                                             className="w-full bg-white border border-zeal-blue text-zeal-blue hover:bg-zeal-blue hover:text-white font-bold py-2.5 rounded-sm text-sm transition-all duration-300 flex justify-center items-center gap-2 uppercase tracking-wide group-hover:shadow-md transform group-hover:-translate-y-1"
                                         >
                                             <i className="fas fa-shopping-cart"></i> Add To Cart
@@ -376,7 +381,7 @@ export default function Home() {
                             <i className="fas fa-shield-alt text-3xl text-zeal-blue"></i>
                             <div>
                                 <h4 className="font-bold text-gray-900 uppercase text-sm">Secure Payment</h4>
-                                <p className="text-xs text-gray-500 mt-1">100% secure payment with Paystack & Flutterwave.</p>
+                                <p className="text-xs text-gray-500 mt-1">100% secure payment with Korapay.</p>
                             </div>
                         </div>
                         <div className="flex items-start gap-4 transform transition-transform hover:-translate-y-1">

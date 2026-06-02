@@ -86,7 +86,7 @@ const TERMS_CONTENT = (
         <span className="w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0">11</span>
         Contact Information
       </h3>
-      <p>Email: support@zealmartworld.com.ng | Phone: +234 ... | Address: Nigeria</p>
+      <p>Email: support@zealmartworld.com.ng | Phone: +234 806 891 6694 | Address: 77 Olu-Obasanjo Road Port Harcourt, Nigeria</p>
     </div>
 
     <div className="bg-gray-100 border border-gray-200 rounded-sm p-4 text-center">

@@ -45,7 +45,7 @@ export default function Shop() {
     const urlCat = searchParams.get('cat') || searchParams.get('search') ? null : pathToCategory(location.pathname);
     const initial = categories.find(c => c.name.toLowerCase() === (urlCat || '').toLowerCase())?.name || 'All';
 
-    const [active, setActive] = useState(initial);
+    const [activeCategories, setActiveCategories] = useState([]);
     const [activeBrands, setActiveBrands] = useState([]);
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
@@ -57,6 +57,7 @@ export default function Shop() {
     const [currentPage, setCurrentPage] = useState(1);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [sortBy, setSortBy] = useState('Popularity');
 
     // Subscribe to real-time categories
     useEffect(() => {
@@ -143,10 +144,10 @@ export default function Shop() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, active, activeBrands, minPrice, maxPrice, condition, activeRam, activeStorage, activeOs]);
+    }, [search, activeCategories, activeBrands, minPrice, maxPrice, condition, activeRam, activeStorage, activeOs]);
 
     const filtered = products.filter(p => {
-        const matchCat = active === 'All' || p.category === active;
+        const matchCat = activeCategories.length === 0 || activeCategories.includes(p.category);
         const normalizedBrand = normalizeBrand(p.brand);
         const matchBrand = activeBrands.length === 0 || activeBrands.includes(normalizedBrand);
         
@@ -154,7 +155,12 @@ export default function Shop() {
         const matchSearch = (p.name || '').toLowerCase().includes(searchLower) ||
                             normalizedBrand.toLowerCase().includes(searchLower) ||
                             (p.category || '').toLowerCase().includes(searchLower) ||
-                            (p.tag || '').toLowerCase().includes(searchLower);
+                            (p.tag || '').toLowerCase().includes(searchLower) ||
+                            (p.description || '').toLowerCase().includes(searchLower) ||
+                            (p.ram || '').toLowerCase().includes(searchLower) ||
+                            (p.storage || '').toLowerCase().includes(searchLower) ||
+                            (p.os || '').toLowerCase().includes(searchLower) ||
+                            (p.condition || '').toLowerCase().includes(searchLower);
                             
         const pPrice = Number(p.price) || 0;
         const matchMinPrice = minPrice === '' || pPrice >= Number(minPrice);
@@ -169,11 +175,24 @@ export default function Shop() {
         return matchCat && matchBrand && matchSearch && matchMinPrice && matchMaxPrice && matchCondition && matchRam && matchStorage && matchOs;
     });
 
+    // Sort filtered items based on sortBy selection
+    const sorted = [...filtered].sort((a, b) => {
+        switch(sortBy) {
+            case 'Price: Low to High':
+                return (Number(a.price) || 0) - (Number(b.price) || 0);
+            case 'Price: High to Low':
+                return (Number(b.price) || 0) - (Number(a.price) || 0);
+            case 'Popularity':
+            default:
+                return 0;
+        }
+    });
+
     const itemsPerPage = 120;
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    const currentItems = sorted.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(sorted.length / itemsPerPage);
 
     return (
         <main className="bg-gray-50 flex-grow min-h-screen">
@@ -183,7 +202,7 @@ export default function Shop() {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="w-full md:w-auto">
                             <h1 className="text-3xl font-display font-black text-gray-900 tracking-tight uppercase border-l-4 border-zeal-red pl-3">
-                                {search ? `Search: ${search}` : active === 'All' ? 'All Appliances & Electronics' : active}
+                                {search ? `Search: ${search}` : activeCategories.length === 0 ? 'All Appliances & Electronics' : activeCategories.join(', ')}
                             </h1>
                             <p className="text-sm text-gray-500 mt-2 flex items-center font-medium">
                                 <i className="fas fa-check-circle text-green-500 mr-1"></i> 100% Genuine Brands • Manufacturer Warranty
@@ -212,17 +231,42 @@ export default function Shop() {
                             <i className="fas fa-list text-gray-400 text-xs"></i>
                         </div>
                         <ul className="divide-y divide-gray-100">
-                            {categories.map(cat => (
+                            <li>
+                                <label className="w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-start cursor-pointer group bg-gray-50">
+                                    <input 
+                                        type="checkbox"
+                                        checked={activeCategories.length === categories.filter(c => c.name !== 'All').length && activeCategories.length > 0}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setActiveCategories(categories.filter(c => c.name !== 'All').map(c => c.name));
+                                            } else {
+                                                setActiveCategories([]);
+                                            }
+                                            setCurrentPage(1);
+                                        }}
+                                        className="mr-3 h-4 w-4 text-zeal-red focus:ring-zeal-red border-gray-300 rounded cursor-pointer"
+                                    />
+                                    <span className={`text-gray-600 group-hover:text-gray-900 font-bold ${activeCategories.length === categories.filter(c => c.name !== 'All').length && activeCategories.length > 0 ? 'text-zeal-red' : ''}`}>All</span>
+                                </label>
+                            </li>
+                            {categories.filter(c => c.name !== 'All').map(cat => (
                                 <li key={cat.id || cat.name}>
-                                    <button
-                                        onClick={() => { setActive(cat.name); setSearch(''); }}
-                                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${
-                                            active === cat.name ? 'text-zeal-red bg-red-50 border-l-4 border-zeal-red font-bold' : 'text-gray-600 border-l-4 border-transparent'
-                                        }`}
-                                    >
-                                        {cat.name}
-                                        <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
-                                    </button>
+                                    <label className="w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-start cursor-pointer group">
+                                        <input 
+                                            type="checkbox"
+                                            checked={activeCategories.includes(cat.name)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setActiveCategories(prev => [...prev, cat.name]);
+                                                } else {
+                                                    setActiveCategories(prev => prev.filter(c => c !== cat.name));
+                                                }
+                                                setCurrentPage(1);
+                                            }}
+                                            className="mr-3 h-4 w-4 text-zeal-red focus:ring-zeal-red border-gray-300 rounded cursor-pointer"
+                                        />
+                                        <span className={`text-gray-600 group-hover:text-gray-900 ${activeCategories.includes(cat.name) ? 'font-bold text-zeal-red' : ''}`}>{cat.name}</span>
+                                    </label>
                                 </li>
                             ))}
                         </ul>
@@ -233,6 +277,24 @@ export default function Shop() {
                             <i className="fas fa-tag text-gray-400 text-xs"></i>
                         </div>
                         <ul className="divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                            <li>
+                                <label className="w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-start cursor-pointer group bg-gray-50">
+                                    <input 
+                                        type="checkbox"
+                                        checked={activeBrands.length === brands.length && activeBrands.length > 0}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setActiveBrands(brands.map(b => b.name));
+                                            } else {
+                                                setActiveBrands([]);
+                                            }
+                                            setCurrentPage(1);
+                                        }}
+                                        className="mr-3 h-4 w-4 text-zeal-red focus:ring-zeal-red border-gray-300 rounded cursor-pointer"
+                                    />
+                                    <span className={`text-gray-600 group-hover:text-gray-900 font-bold ${activeBrands.length === brands.length && activeBrands.length > 0 ? 'text-zeal-red' : ''}`}>All</span>
+                                </label>
+                            </li>
                             {brands.map(brand => (
                                 <li key={brand.id || brand.name}>
                                     <label className="w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-start cursor-pointer group">
@@ -297,7 +359,7 @@ export default function Shop() {
                         </div>
 
                         {/* Specifications - conditional on category */}
-                        {['Phones', 'Laptops', 'Gaming', 'Tablets'].includes(active) && (
+                        {(activeCategories.length === 0 || activeCategories.some(cat => ['Phones', 'Laptops', 'Gaming', 'Tablets'].includes(cat))) && (
                             <>
                                 <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between border-t border-gray-200">
                                     Specifications
@@ -350,11 +412,15 @@ export default function Shop() {
                 <div className="flex-1">
                     <div className="bg-white p-3 border border-gray-200 mb-6 flex justify-between items-center">
                         <span className="text-sm font-medium text-gray-600">
-                            Found <span className="font-bold text-gray-900">{filtered.length}</span> items
+                            Found <span className="font-bold text-gray-900">{sorted.length}</span> items
                         </span>
                         <div className="flex items-center text-sm">
                             <span className="text-gray-500 mr-2 font-medium">Sort by:</span>
-                            <select className="bg-gray-50 border border-gray-300 text-gray-700 py-1.5 px-3 outline-none text-sm font-medium">
+                            <select 
+                                value={sortBy}
+                                onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                                className="bg-gray-50 border border-gray-300 text-gray-700 py-1.5 px-3 outline-none text-sm font-medium"
+                            >
                                 <option>Popularity</option>
                                 <option>Price: Low to High</option>
                                 <option>Price: High to Low</option>
@@ -380,7 +446,7 @@ export default function Shop() {
                             <button 
                                 onClick={() => { 
                                     setSearch(''); 
-                                    setActive('All'); 
+                                    setActiveCategories([]);
                                     setActiveBrands([]);
                                     setMinPrice('');
                                     setMaxPrice('');

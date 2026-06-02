@@ -52,7 +52,7 @@ export default function Navbar() {
             <div className="bg-zeal-gray border-b border-gray-200 py-1.5 hidden md:block">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center text-[11px] text-gray-600 font-medium">
                     <div className="flex space-x-6">
-                        <span><i className="fas fa-phone text-zeal-red mr-1"></i> +234 800 123 4567</span>
+                        <span><i className="fas fa-phone text-zeal-red mr-1"></i> +234 806 891 6694</span>
                         <span><i className="fas fa-envelope text-zeal-red mr-1"></i> sales@zealmart.com</span>
                     </div>
                     <div className="flex space-x-6">
