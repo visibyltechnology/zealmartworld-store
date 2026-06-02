@@ -15,6 +15,7 @@ import {
   createPaymentSuccessNotification
 } from '../utils/notificationService';
 import { nigeriaData } from '../data/locations';
+import { getDeliveryDetails } from '../utils/deliveryPricing';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -233,13 +234,52 @@ export default function Cart() {
 
       // Check if any items are installment payments (need tokenization)
       const hasInstallments = items.some(i => i.paymentChoice === 'installment');
+      
+      const paymentRef = `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+      let paymentAmount = Math.round(totalToPayNow + deliveryDetails.price);
+      
+      // Korapay minimum: ₦1,000 (already guaranteed by store, but round up any remaining kobo)
+      const MINIMUM_PAYMENT = 1000;
+      
+      // Round up any kobo amounts to full naira (₦X.50 → ₦X+1)
+      paymentAmount = Math.ceil(paymentAmount);
+      
+      // Ensure minimum ₦1,000 (store should guarantee this, but double-check)
+      if (paymentAmount < MINIMUM_PAYMENT && paymentAmount > 0) {
+        paymentAmount = MINIMUM_PAYMENT;
+      }
+      
+      // Log payment details for debugging
+      console.log('Korapay Payment Details:', {
+        reference: paymentRef,
+        amount: paymentAmount,
+        currency: 'NGN',
+        customer: {
+          name: user.displayName || user.email.split('@')[0],
+          email: user.email
+        },
+        hasInstallments
+      });
+
+      // If no valid amount, show error
+      if (paymentAmount <= 0) {
+        setError('Invalid cart total. Please review your items.');
+        toast.error('Invalid payment amount');
+        setLoading(false);
+        return;
+      }
 
       window.Korapay.initialize({
         key: koraKey,
-        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: Math.round(totalToPayNow),
+        reference: paymentRef,
+        amount: paymentAmount,
         currency: "NGN",
-        ...(hasInstallments && { is_tokenized: true }),
+        metadata: {
+          orderId: paymentRef,
+          itemCount: items.length,
+          source: 'web'
+        },
         customer: {
             name: user.displayName || user.email.split('@')[0],
             email: user.email
@@ -274,6 +314,7 @@ export default function Cart() {
             try {
               if (splitMode) {
                 const groups = buildGroupMap(expandedItems);
+                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
                 for (const [gId, groupUnits] of Object.entries(groups)) {
                   if (groupUnits.length === 0) continue;
                   const merged = {};
@@ -282,8 +323,8 @@ export default function Cart() {
                     merged[unit.cartItemId].quantity += 1;
                   });
                   const groupItems = Object.values(merged);
-                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
-                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
+                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
+                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0) + deliveryDetails.price;
 
                   for (const item of groupItems) {
                     try {
@@ -297,6 +338,7 @@ export default function Cart() {
                     userId: user.uid,
                     items: groupItems,
                     deliveryInfo: deliveryInfo,
+                    deliveryFee: deliveryDetails.price,
                     totalAmount: groupTotalAmount,
                     amountPaid: groupTotalToPayNow,
                     status: 'Processing',
@@ -306,12 +348,19 @@ export default function Cart() {
 
                   try {
                     await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
-                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
+                    const remainingBalance = groupTotalAmount - groupTotalToPayNow;
+                    const paymentFreq = groupItems.find(i => i.paymentFrequency)?.paymentFrequency;
+                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow, {
+                      itemCount: groupItems.length,
+                      remainingBalance: remainingBalance,
+                      paymentFrequency: paymentFreq
+                    });
                   } catch (notifErr) {
                     console.error('Error creating notifications:', notifErr);
                   }
                 }
               } else {
+                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
                 for (const item of items) {
                   try {
                     await decreaseInventory(item.id, Number(item.quantity));
@@ -320,13 +369,14 @@ export default function Cart() {
                   }
                 }
 
-                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
                 const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
                   userId: user.uid,
                   items: items,
                   deliveryInfo: deliveryInfo,
+                  deliveryFee: deliveryDetails.price,
                   totalAmount: orderTotalAmount,
-                  amountPaid: totalToPayNow,
+                  amountPaid: totalToPayNow + deliveryDetails.price,
                   status: 'Processing',
                   paymentRef: response.reference || `REF_${Date.now()}`,
                   createdAt: new Date(),
@@ -334,7 +384,13 @@ export default function Cart() {
 
                 try {
                   await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
-                  await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow);
+                  const remainingBalance = orderTotalAmount - (totalToPayNow + deliveryDetails.price);
+                  const paymentFreq = items.find(i => i.paymentFrequency)?.paymentFrequency;
+                  await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow + deliveryDetails.price, {
+                    itemCount: items.length,
+                    remainingBalance: remainingBalance,
+                    paymentFrequency: paymentFreq
+                  });
                 } catch (notifErr) {
                   console.error('Error creating notifications:', notifErr);
                 }
@@ -359,7 +415,12 @@ export default function Cart() {
         onFailed: function(response) {
             clearTimeout(safetyTimer);
             setLoading(false);
-            const msg = response?.data?.message || "Payment failed. Please try again.";
+            console.error('Korapay Payment Failed:', {
+              response,
+              reference: paymentRef,
+              amount: paymentAmount
+            });
+            const msg = response?.data?.message || response?.message || "Payment failed. Please try again.";
             toast.error(msg);
             setError(msg);
         },
@@ -553,19 +614,27 @@ export default function Cart() {
 
               <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-100 pb-3">Order Summary</h2>
               
-              <div className="flex justify-between items-center text-sm font-medium text-gray-500 mb-3">
-                <span>Subtotal ({items.reduce((a, b) => a + b.quantity, 0)} items)</span>
-                <span className="text-gray-900 font-bold">{fmt(totalToPayNow)}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm font-medium text-gray-500 mb-6">
-                <span>Shipping</span>
-                <span>Calculated at checkout</span>
-              </div>
+              {(() => {
+                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+                const totalWithDelivery = totalToPayNow + deliveryDetails.price;
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-sm font-medium text-gray-500 mb-3">
+                      <span>Subtotal ({items.reduce((a, b) => a + b.quantity, 0)} items)</span>
+                      <span className="text-gray-900 font-bold">{fmt(totalToPayNow)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-medium text-gray-500 mb-6">
+                      <span>Shipping ({deliveryInfo.state || 'Select state'})</span>
+                      <span className="text-gray-900 font-bold">{deliveryDetails.price > 0 ? fmt(deliveryDetails.price) : 'Select delivery location'}</span>
+                    </div>
 
-              <div className="flex justify-between items-end border-t border-gray-200 pt-4 mb-6">
-                <span className="text-sm font-bold text-gray-800 uppercase tracking-widest">Total Due Today</span>
-                <span className="text-2xl font-display font-black text-zeal-red">{fmt(totalToPayNow)}</span>
-              </div>
+                    <div className="flex justify-between items-end border-t border-gray-200 pt-4 mb-6">
+                      <span className="text-sm font-bold text-gray-800 uppercase tracking-widest">Total Due Today</span>
+                      <span className="text-2xl font-display font-black text-zeal-red">{deliveryDetails.price > 0 ? fmt(totalWithDelivery) : fmt(totalToPayNow)}</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {!user && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-sm mb-6 text-sm font-bold flex items-center gap-2">
@@ -833,10 +902,28 @@ export default function Cart() {
                     </div>
 
                     <div className="bg-gray-50 border border-gray-200 rounded-sm p-5 mb-6">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-black text-gray-500 uppercase tracking-wider">Total Due Today</span>
-                        <span className="text-xl font-display font-black text-zeal-red">{fmt(totalToPayNow)}</span>
-                      </div>
+                      {(() => {
+                        const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+                        const totalWithDelivery = totalToPayNow + deliveryDetails.price;
+                        return (
+                          <>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-black text-gray-500 uppercase tracking-wider">Subtotal</span>
+                              <span className="text-sm font-bold text-gray-900">{fmt(totalToPayNow)}</span>
+                            </div>
+                            {deliveryDetails.price > 0 && (
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-black text-gray-500 uppercase tracking-wider">Delivery</span>
+                                <span className="text-sm font-bold text-gray-900">{fmt(deliveryDetails.price)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center border-t border-gray-300 pt-3">
+                              <span className="text-sm font-black text-gray-500 uppercase tracking-wider">Total Due Today</span>
+                              <span className="text-xl font-display font-black text-zeal-red">{fmt(totalWithDelivery)}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                       {items.some(i => i.paymentChoice === 'installment') && (
                         <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Combined Installment</span>

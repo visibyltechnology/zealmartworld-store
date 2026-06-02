@@ -4,10 +4,8 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import { isProductInStock, getStockDisplayText } from '../utils/inventoryService';
-
-const CATEGORIES = [
-    'All', 'Air Conditioners', 'Televisions', 'Refrigerators', 'Generators', 'Washing Machines', 'Phones', 'Laptops', 'Audio', 'Gaming'
-];
+import { listenToCategories, DEFAULT_CATEGORIES } from '../utils/categoryService';
+import { listenToBrands, DEFAULT_BRANDS } from '../utils/brandService';
 
 function pathToCategory(pathname) {
     if (pathname.includes('phones')) return 'Phones';
@@ -41,15 +39,40 @@ export default function Shop() {
     const location = useLocation();
     const navigate = useNavigate();
 
+    const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+    const [brands, setBrands] = useState(DEFAULT_BRANDS);
+
     const urlCat = searchParams.get('cat') || searchParams.get('search') ? null : pathToCategory(location.pathname);
-    const initial = CATEGORIES.find(c => c.toLowerCase() === (urlCat || '').toLowerCase()) || 'All';
+    const initial = categories.find(c => c.name.toLowerCase() === (urlCat || '').toLowerCase())?.name || 'All';
 
     const [active, setActive] = useState(initial);
-    const [activeBrand, setActiveBrand] = useState('All');
+    const [activeBrands, setActiveBrands] = useState([]);
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
+    const [condition, setCondition] = useState('All');
+    const [activeRam, setActiveRam] = useState('All');
+    const [activeStorage, setActiveStorage] = useState('All');
+    const [activeOs, setActiveOs] = useState('All');
     const [search, setSearch] = useState(searchParams.get('search') || '');
     const [currentPage, setCurrentPage] = useState(1);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Subscribe to real-time categories
+    useEffect(() => {
+        const unsubscribe = listenToCategories((cats) => {
+            setCategories(cats.length > 0 ? cats : DEFAULT_CATEGORIES);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Subscribe to real-time brands
+    useEffect(() => {
+        const unsubscribe = listenToBrands((brandList) => {
+            setBrands(brandList.length > 0 ? brandList : DEFAULT_BRANDS);
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Ensure product has inventory fields
     const ensureInventoryFields = (product) => ({
@@ -92,34 +115,58 @@ export default function Shop() {
     useEffect(() => {
         const cat = searchParams.get('cat') || pathToCategory(location.pathname);
         if (cat) {
-            const match = CATEGORIES.find(c => c.toLowerCase() === cat.toLowerCase());
+            const match = categories.find(c => c.name.toLowerCase() === cat.toLowerCase())?.name;
             setActive(match || 'All');
             setSearch('');
-            setActiveBrand('All');
+            setActiveBrands([]);
+            setMinPrice('');
+            setMaxPrice('');
+            setCondition('All');
+            setActiveRam('All');
+            setActiveStorage('All');
+            setActiveOs('All');
         }
         
         const searchQ = searchParams.get('search');
         if (searchQ) {
             setSearch(searchQ);
             setActive('All');
-            setActiveBrand('All');
+            setActiveBrands([]);
+            setMinPrice('');
+            setMaxPrice('');
+            setCondition('All');
+            setActiveRam('All');
+            setActiveStorage('All');
+            setActiveOs('All');
         }
-    }, [location.search, location.pathname, searchParams]);
+    }, [location.search, location.pathname, searchParams, categories]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, active, activeBrand]);
+    }, [search, active, activeBrands, minPrice, maxPrice, condition, activeRam, activeStorage, activeOs]);
 
     const filtered = products.filter(p => {
         const matchCat = active === 'All' || p.category === active;
         const normalizedBrand = normalizeBrand(p.brand);
-        const matchBrand = activeBrand === 'All' || normalizedBrand === activeBrand;
+        const matchBrand = activeBrands.length === 0 || activeBrands.includes(normalizedBrand);
+        
         const searchLower = search.toLowerCase();
         const matchSearch = (p.name || '').toLowerCase().includes(searchLower) ||
                             normalizedBrand.toLowerCase().includes(searchLower) ||
                             (p.category || '').toLowerCase().includes(searchLower) ||
                             (p.tag || '').toLowerCase().includes(searchLower);
-        return matchCat && matchBrand && matchSearch;
+                            
+        const pPrice = Number(p.price) || 0;
+        const matchMinPrice = minPrice === '' || pPrice >= Number(minPrice);
+        const matchMaxPrice = maxPrice === '' || pPrice <= Number(maxPrice);
+        
+        const matchCondition = condition === 'All' || p.condition === condition;
+        
+        const matchRam = activeRam === 'All' || p.ram === activeRam || (p.name && p.name.includes(activeRam)) || (p.description && p.description.includes(activeRam));
+        const matchStorage = activeStorage === 'All' || p.storage === activeStorage || (p.name && p.name.includes(activeStorage)) || (p.description && p.description.includes(activeStorage));
+        const matchOs = activeOs === 'All' || p.os === activeOs || (p.name && p.name.includes(activeOs)) || (p.description && p.description.includes(activeOs));
+        
+        return matchCat && matchBrand && matchSearch && matchMinPrice && matchMaxPrice && matchCondition && matchRam && matchStorage && matchOs;
     });
 
     const itemsPerPage = 120;
@@ -165,15 +212,15 @@ export default function Shop() {
                             <i className="fas fa-list text-gray-400 text-xs"></i>
                         </div>
                         <ul className="divide-y divide-gray-100">
-                            {CATEGORIES.map(cat => (
-                                <li key={cat}>
+                            {categories.map(cat => (
+                                <li key={cat.id || cat.name}>
                                     <button
-                                        onClick={() => { setActive(cat); setSearch(''); }}
+                                        onClick={() => { setActive(cat.name); setSearch(''); }}
                                         className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${
-                                            active === cat ? 'text-zeal-red bg-red-50 border-l-4 border-zeal-red font-bold' : 'text-gray-600 border-l-4 border-transparent'
+                                            active === cat.name ? 'text-zeal-red bg-red-50 border-l-4 border-zeal-red font-bold' : 'text-gray-600 border-l-4 border-transparent'
                                         }`}
                                     >
-                                        {cat}
+                                        {cat.name}
                                         <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
                                     </button>
                                 </li>
@@ -185,21 +232,117 @@ export default function Shop() {
                             Brands
                             <i className="fas fa-tag text-gray-400 text-xs"></i>
                         </div>
-                        <ul className="divide-y divide-gray-100">
-                            {['All', ...Array.from(new Set(products.map(p => normalizeBrand(p.brand)).filter(Boolean))).sort()].map(brand => (
-                                <li key={brand}>
-                                    <button
-                                        onClick={() => { setActiveBrand(brand); setCurrentPage(1); }}
-                                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${
-                                            activeBrand === brand ? 'text-zeal-red bg-red-50 border-l-4 border-zeal-red font-bold' : 'text-gray-600 border-l-4 border-transparent'
-                                        }`}
-                                    >
-                                        {brand}
-                                        <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
-                                    </button>
+                        <ul className="divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                            {brands.map(brand => (
+                                <li key={brand.id || brand.name}>
+                                    <label className="w-full text-left px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 flex items-center justify-start cursor-pointer group">
+                                        <input 
+                                            type="checkbox"
+                                            checked={activeBrands.includes(brand.name)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setActiveBrands(prev => [...prev, brand.name]);
+                                                } else {
+                                                    setActiveBrands(prev => prev.filter(b => b !== brand.name));
+                                                }
+                                                setCurrentPage(1);
+                                            }}
+                                            className="mr-3 h-4 w-4 text-zeal-red focus:ring-zeal-red border-gray-300 rounded cursor-pointer"
+                                        />
+                                        <span className={`text-gray-600 group-hover:text-gray-900 ${activeBrands.includes(brand.name) ? 'font-bold text-zeal-red' : ''}`}>{brand.name}</span>
+                                    </label>
                                 </li>
                             ))}
                         </ul>
+
+                        {/* Price Range */}
+                        <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between border-t border-gray-200">
+                            Price (₦)
+                            <i className="fas fa-money-bill-wave text-gray-400 text-xs"></i>
+                        </div>
+                        <div className="px-4 py-4 flex items-center gap-2">
+                            <input 
+                                type="number" 
+                                placeholder="Min" 
+                                value={minPrice}
+                                onChange={e => { setMinPrice(e.target.value); setCurrentPage(1); }}
+                                className="w-full bg-white border border-gray-300 focus:border-zeal-blue rounded-sm py-1.5 px-2 outline-none text-sm transition-colors font-medium"
+                            />
+                            <span className="text-gray-400">-</span>
+                            <input 
+                                type="number" 
+                                placeholder="Max" 
+                                value={maxPrice}
+                                onChange={e => { setMaxPrice(e.target.value); setCurrentPage(1); }}
+                                className="w-full bg-white border border-gray-300 focus:border-zeal-blue rounded-sm py-1.5 px-2 outline-none text-sm transition-colors font-medium"
+                            />
+                        </div>
+
+                        {/* Condition */}
+                        <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between border-t border-gray-200">
+                            Condition
+                            <i className="fas fa-box text-gray-400 text-xs"></i>
+                        </div>
+                        <div className="px-4 py-3">
+                            <select 
+                                value={condition} 
+                                onChange={e => { setCondition(e.target.value); setCurrentPage(1); }}
+                                className="w-full bg-white border border-gray-300 focus:border-zeal-blue text-gray-700 font-medium py-2 px-3 rounded-sm text-sm outline-none transition-colors cursor-pointer"
+                            >
+                                <option value="All">Any Condition</option>
+                                <option value="New">Brand New</option>
+                                <option value="Refurbished">Refurbished / UK Used</option>
+                                <option value="Used">Used</option>
+                            </select>
+                        </div>
+
+                        {/* Specifications - conditional on category */}
+                        {['Phones', 'Laptops', 'Gaming', 'Tablets'].includes(active) && (
+                            <>
+                                <div className="bg-zeal-dark text-white px-4 py-3 font-bold uppercase tracking-wide text-sm flex items-center justify-between border-t border-gray-200">
+                                    Specifications
+                                    <i className="fas fa-microchip text-gray-400 text-xs"></i>
+                                </div>
+                                <div className="px-4 py-4 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">RAM</label>
+                                        <select value={activeRam} onChange={e => { setActiveRam(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-300 focus:border-zeal-blue text-gray-700 py-1.5 px-2 rounded-sm text-sm outline-none transition-colors cursor-pointer font-medium">
+                                            <option value="All">Any RAM</option>
+                                            <option value="4GB">4GB</option>
+                                            <option value="6GB">6GB</option>
+                                            <option value="8GB">8GB</option>
+                                            <option value="12GB">12GB</option>
+                                            <option value="16GB">16GB</option>
+                                            <option value="32GB">32GB</option>
+                                            <option value="64GB">64GB</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">Storage</label>
+                                        <select value={activeStorage} onChange={e => { setActiveStorage(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-300 focus:border-zeal-blue text-gray-700 py-1.5 px-2 rounded-sm text-sm outline-none transition-colors cursor-pointer font-medium">
+                                            <option value="All">Any Storage</option>
+                                            <option value="64GB">64GB</option>
+                                            <option value="128GB">128GB</option>
+                                            <option value="256GB">256GB</option>
+                                            <option value="512GB">512GB</option>
+                                            <option value="1TB">1TB</option>
+                                            <option value="2TB">2TB</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">OS</label>
+                                        <select value={activeOs} onChange={e => { setActiveOs(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-300 focus:border-zeal-blue text-gray-700 py-1.5 px-2 rounded-sm text-sm outline-none transition-colors cursor-pointer font-medium">
+                                            <option value="All">Any OS</option>
+                                            <option value="iOS">iOS</option>
+                                            <option value="Android">Android</option>
+                                            <option value="Windows">Windows</option>
+                                            <option value="macOS">macOS</option>
+                                            <option value="Linux">Linux</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -235,7 +378,17 @@ export default function Shop() {
                             <h3 className="text-xl font-bold text-gray-800 mb-2 uppercase">No products found</h3>
                             <p className="text-gray-500 mb-6 font-medium">We couldn't find any items matching your criteria.</p>
                             <button 
-                                onClick={() => { setSearch(''); setActive('All'); }}
+                                onClick={() => { 
+                                    setSearch(''); 
+                                    setActive('All'); 
+                                    setActiveBrands([]);
+                                    setMinPrice('');
+                                    setMaxPrice('');
+                                    setCondition('All');
+                                    setActiveRam('All');
+                                    setActiveStorage('All');
+                                    setActiveOs('All');
+                                }}
                                 className="bg-zeal-red hover:bg-red-800 text-white font-bold py-2.5 px-8 uppercase tracking-wide text-sm transition"
                             >
                                 Clear All Filters

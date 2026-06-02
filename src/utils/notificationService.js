@@ -12,10 +12,6 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import {
-  sendOrderOTPEmail,
-  sendTrackingUpdateEmail,
-} from './email';
 
 /**
  * Notification Types
@@ -239,14 +235,52 @@ export const subscribeToUnreadCount = (userId, callback) => {
  * @param {string} userId - User ID
  * @param {string} orderId - Order ID
  * @param {number} amount - Payment amount
+ * @param {Object} orderData - Order data (items, total, etc.)
  */
-export const createPaymentSuccessNotification = async (userId, orderId, amount) => {
+export const createPaymentSuccessNotification = async (userId, orderId, amount, orderData = {}) => {
+  // Prevent duplicate notifications within 5 seconds
+  try {
+    const recentNotifs = await getDocs(
+      query(
+        collection(db, 'notifications'),
+        where('user_id', '==', userId),
+        where('type', '==', NOTIFICATION_TYPES.PAYMENT_SUCCESS),
+        where('metadata.order_id', '==', orderId),
+        orderBy('created_at', 'desc'),
+        limit(1)
+      )
+    );
+
+    if (recentNotifs.size > 0) {
+      const lastNotif = recentNotifs.docs[0].data();
+      const timeDiff = Date.now() - lastNotif.created_at.toDate().getTime();
+      // Skip if notif created within 5 seconds
+      if (timeDiff < 5000 && Math.abs(lastNotif.metadata.amount - amount) < 10) {
+        console.log('Duplicate payment notification blocked');
+        return lastNotif.id;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not check for duplicates:', err);
+  }
+
+  // Build rich message with order details
+  const roundedAmount = Math.ceil(amount);
+  const itemsInfo = orderData.itemCount ? `${orderData.itemCount} item${orderData.itemCount > 1 ? 's' : ''}` : 'items';
+  const isInstallment = orderData.paymentFrequency ? `(${orderData.paymentFrequency === 'weekly' ? 'weekly' : 'monthly'} payment)` : '';
+  const remainingText = orderData.remainingBalance > 0 
+    ? `\nRemaining Balance: ₦${Math.ceil(orderData.remainingBalance).toLocaleString()}`
+    : '\n✓ Order fully paid';
+
   return createNotification(userId, NOTIFICATION_TYPES.PAYMENT_SUCCESS, {
     title: 'Payment Confirmed! 💳',
-    message: `We've received your payment of ₦${Number(amount).toLocaleString()}. Your order is being processed.`,
+    message: `Payment of ₦${roundedAmount.toLocaleString()} received for ${itemsInfo} ${isInstallment}.${remainingText}`,
     metadata: {
       order_id: orderId,
-      amount: amount,
+      amount: roundedAmount,
+      item_count: orderData.itemCount,
+      remaining_balance: orderData.remainingBalance,
+      payment_frequency: orderData.paymentFrequency,
       timestamp: new Date().toISOString()
     }
   });

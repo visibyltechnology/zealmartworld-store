@@ -103,7 +103,7 @@ const useCartStore = create(
       },
 
       getInitialPaymentTotal: () => {
-        return get().items.reduce((total, item) => {
+        const total = get().items.reduce((total, item) => {
           if (item.paymentChoice === 'full') {
             return total + (item.price * item.quantity);
           } else {
@@ -111,6 +111,16 @@ const useCartStore = create(
             return total + ((item.periodPayment || item.monthlyPayment || 0) * item.quantity);
           }
         }, 0);
+        
+        // Round up to nearest naira (ceiling) - converts ₦X.50 to ₦X+1
+        let rounded = Math.ceil(total);
+        
+        // Ensure minimum ₦1,000 payment (no amounts below ₦1,000)
+        if (rounded < 1000 && rounded > 0) {
+          rounded = 1000;
+        }
+        
+        return rounded;
       }
     }),
     {

@@ -127,12 +127,21 @@ export default function Profile() {
 
             try {
               const orderRef = doc(db, 'orders', order.id);
+              const newAmountPaid = order.amountPaid + amountToPay;
               await updateDoc(orderRef, {
-                amountPaid: order.amountPaid + amountToPay,
-                status: (order.amountPaid + amountToPay >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
+                amountPaid: newAmountPaid,
+                status: (newAmountPaid >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
               });
               
-              if (user?.uid) await createPaymentSuccessNotification(user.uid, order.id, amountToPay);
+              if (user?.uid) {
+                const remainingBalance = order.totalAmount - newAmountPaid;
+                const paymentFreq = order.items?.find(i => i.paymentFrequency)?.paymentFrequency;
+                await createPaymentSuccessNotification(user.uid, order.id, amountToPay, {
+                  itemCount: order.items?.length || 1,
+                  remainingBalance: remainingBalance,
+                  paymentFrequency: paymentFreq
+                });
+              }
 
               toast.success('Payment recorded successfully!');
               
@@ -575,7 +584,19 @@ export default function Profile() {
                                           <input
                                             type="number"
                                             value={currentCustomAmount}
-                                            onChange={(e) => setCustomAmounts(prev => ({ ...prev, [order.id]: Number(e.target.value) }))}
+                                            onChange={(e) => {
+                                              const newAmount = Number(e.target.value);
+                                              const remainingBalance = balance - newAmount;
+                                              
+                                              // Prevent leaving balance below ₦1,000 (unless balance is fully paid)
+                                              if (remainingBalance > 0 && remainingBalance < 1000) {
+                                                // Auto-adjust to pay full amount or min ₦1,000 remaining
+                                                const adjusted = Math.max(balance - 1000, 0);
+                                                setCustomAmounts(prev => ({ ...prev, [order.id]: adjusted }));
+                                              } else {
+                                                setCustomAmounts(prev => ({ ...prev, [order.id]: newAmount }));
+                                              }
+                                            }}
                                             max={balance}
                                             min={1}
                                             className="w-full pl-7 pr-3 py-2.5 bg-white border border-gray-300 rounded-sm text-sm font-bold focus:border-zeal-blue outline-none transition-colors"
@@ -589,6 +610,13 @@ export default function Profile() {
                                           Pay
                                         </button>
                                       </div>
+
+                                      {/* Helper text for custom payment rules */}
+                                      {balance > 1000 && (
+                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider text-center mt-2">
+                                          ⓘ Remaining balance must be ≥ ₦1,000 or fully paid
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>

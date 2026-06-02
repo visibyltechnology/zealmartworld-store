@@ -26,6 +26,8 @@ const PrivacyPolicy  = lazy(() => import('./pages/PrivacyPolicy'));
 // Admin pages
 const AdminLayout      = lazy(() => import('./pages/Admin/AdminLayout'));
 const ProductManager   = lazy(() => import('./pages/Admin/ProductManager'));
+const CategoryManager  = lazy(() => import('./pages/Admin/CategoryManager'));
+const BrandManager     = lazy(() => import('./pages/Admin/BrandManager'));
 const ProductForm      = lazy(() => import('./pages/Admin/ProductForm'));
 const AdminOrders      = lazy(() => import('./pages/Admin/AdminOrders'));
 const SiteSettings     = lazy(() => import('./pages/Admin/SiteSettings'));
@@ -120,6 +122,8 @@ function App() {
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLayout />}>
             <Route index              element={<ProductManager />} />
+            <Route path="categories"  element={<CategoryManager />} />
+            <Route path="brands"      element={<BrandManager />} />
             <Route path="new"         element={<ProductForm />} />
             <Route path="edit/:id"    element={<ProductForm />} />
             <Route path="orders"      element={<AdminOrders />} />

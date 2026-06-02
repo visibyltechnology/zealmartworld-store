@@ -6,6 +6,7 @@ import {
   Edit, Trash2, PlusCircle, Package, Star, Search,
   SlidersHorizontal, Ruler, BadgePercent, ArrowUpDown, Eye, EyeOff
 } from 'lucide-react';
+import { listenToCategories, CATEGORY_STYLES, getDefaultStyle } from '../../utils/categoryService';
 
 const KNOWN_BRANDS = [
   'Samsung', 'LG', 'Hisense', 'TCL', 'Apple', 'Sony', 'HP', 'Panasonic',
@@ -30,22 +31,8 @@ function normalizeBrand(brand) {
   return brand.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
-const CATEGORY_STYLES = {
-  'Air Conditioners':  { bg: '#eff6ff', text: '#3b82f6', border: '#bfdbfe', dot: '#3b82f6', glow: 'rgba(59,130,246,0.15)' },
-  'Televisions':     { bg: '#f3f0ff', text: '#7c3aed', border: '#ddd6fe', dot: '#7c3aed', glow: 'rgba(124,58,237,0.15)' },
-  'Washing Machines': { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8', dot: '#db2777', glow: 'rgba(219,39,119,0.15)' },
-  'Refrigerators': { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', glow: 'rgba(217,119,6,0.15)' },
-  'Generators': { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', glow: 'rgba(5,150,105,0.15)' },
-  'Phones': { bg: '#ecf9ff', text: '#0891b2', border: '#a5f3fc', dot: '#0891b2', glow: 'rgba(6,182,212,0.15)' },
-  'Laptops': { bg: '#f3e8ff', text: '#a855f7', border: '#e9d5ff', dot: '#a855f7', glow: 'rgba(168,85,247,0.15)' },
-  'Audio': { bg: '#ffe2e6', text: '#f43f5e', border: '#ffbdc7', dot: '#f43f5e', glow: 'rgba(244,63,94,0.15)' },
-  'Gaming': { bg: '#fff7ed', text: '#fb923c', border: '#fed7aa', dot: '#fb923c', glow: 'rgba(251,146,60,0.15)' },
-};
-
-const defaultCat = { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', dot: '#6b7280', glow: 'rgba(0,0,0,0.08)' };
-
 function CategoryBadge({ category }) {
-  const s = CATEGORY_STYLES[category] || defaultCat;
+  const s = CATEGORY_STYLES[category] || getDefaultStyle();
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,

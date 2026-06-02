@@ -5,7 +5,6 @@ import { auth, db } from '../firebase';
 import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
-import { sendRegistrationOTPEmail } from '../utils/email';
 import { hashOTP } from '../utils/otpService';
 import toast from 'react-hot-toast';
 import LegalModal from '../components/LegalModal';

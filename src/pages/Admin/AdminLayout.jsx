@@ -1,6 +1,6 @@
 import { Navigate, Outlet, NavLink } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
-import { Package, PlusCircle, LogOut, User, ClipboardList, Settings, Menu, X } from 'lucide-react';
+import { Package, PlusCircle, LogOut, User, ClipboardList, Settings, Menu, X, Tag, Briefcase } from 'lucide-react';
 import { auth } from '../../firebase';
 import { signOut } from 'firebase/auth';
 import toast from 'react-hot-toast';
@@ -16,6 +16,8 @@ export default function AdminLayout() {
 
   const navLinks = [
     { to: "/admin", icon: <Package size={18} />, label: "Manage Products", end: true },
+    { to: "/admin/categories", icon: <Tag size={18} />, label: "Manage Categories" },
+    { to: "/admin/brands", icon: <Briefcase size={18} />, label: "Manage Brands" },
     { to: "/admin/orders", icon: <ClipboardList size={18} />, label: "Customer Orders" },
     { to: "/admin/new", icon: <PlusCircle size={18} />, label: "Add Product" },
     { to: "/admin/settings", icon: <Settings size={18} />, label: "Site Settings" },
