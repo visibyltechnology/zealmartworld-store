@@ -117,7 +117,7 @@ export default function Shop() {
         const cat = searchParams.get('cat') || pathToCategory(location.pathname);
         if (cat) {
             const match = categories.find(c => c.name.toLowerCase() === cat.toLowerCase())?.name;
-            setActive(match || 'All');
+            setActiveCategories(match ? [match] : []);
             setSearch('');
             setActiveBrands([]);
             setMinPrice('');
@@ -131,7 +131,7 @@ export default function Shop() {
         const searchQ = searchParams.get('search');
         if (searchQ) {
             setSearch(searchQ);
-            setActive('All');
+            setActiveCategories([]);
             setActiveBrands([]);
             setMinPrice('');
             setMaxPrice('');
