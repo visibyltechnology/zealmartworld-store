@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import emailjs from '@emailjs/browser';
+import { sendRegistrationOTPEmail } from '../utils/email';
 import { hashOTP, verifyOTPHash } from '../utils/otpService';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
@@ -200,22 +200,19 @@ export default function VerifyOTP() {
         }
       }
 
-      // Send via EmailJS with error surfacing
+      // Send via EmailJS using centralised email.js
       try {
-        const result = await emailjs.send(
-          'service_4qwypyf',
-          'template_o17qzmm',
-          {
-            to_email: email,
-            email: email,
-            name: userData.firstName || 'Customer',
-            otp: newOtpCode,
-            code: newOtpCode
-          },
-          'CWdxDP7npAJ5fJzA1'
+        const sent = await sendRegistrationOTPEmail(
+          email,
+          userData.firstName || 'Customer',
+          newOtpCode
         );
-        console.log('EmailJS resend success:', result.status, result.text);
-        toast.success('A new OTP has been sent to your email and WhatsApp.');
+        if (sent) {
+          console.log('EmailJS resend success');
+          toast.success('A new OTP has been sent to your email.');
+        } else {
+          throw new Error('Email failed to send');
+        }
       } catch (emailErr) {
         console.error('EmailJS resend error:', emailErr);
         toast.error(`Email send failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`, { duration: 6000 });

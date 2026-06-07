@@ -6,6 +6,7 @@ import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/fires
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
 import { hashOTP } from '../utils/otpService';
+import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 import LegalModal from '../components/LegalModal';
 
