@@ -48,7 +48,7 @@ function CategoryBadge({ category }) {
 
 function ProductCard({ product, onDelete, onFeaturedToggle, onHiddenToggle }) {
   const [hovered, setHovered] = useState(false);
-  const catStyle = CATEGORY_STYLES[product.category] || defaultCat;
+  const catStyle = CATEGORY_STYLES[product.category] || getDefaultStyle();
   const hasSale = product.pss && Number(product.pss) > 0 && Number(product.pss) < Number(product.price);
   const discount = hasSale
     ? Math.round(100 - (Number(product.pss) / Number(product.price)) * 100)
