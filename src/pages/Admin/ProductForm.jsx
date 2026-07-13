@@ -49,8 +49,8 @@ export default function ProductForm() {
     inventory_status: 'in_stock',
     is_hidden: false
   });
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -69,6 +69,11 @@ export default function ProductForm() {
             setFormData(data);
             if (data.featured) {
               setPositionInput(data.featuredPosition || '');
+            }
+            if (data.images && data.images.length > 0) {
+              setImagePreviews(data.images);
+            } else if (data.img) {
+              setImagePreviews([data.img]);
             }
           } else {
             setError('Product not found');
@@ -117,25 +122,29 @@ export default function ProductForm() {
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const processFile = (file) => {
-    if (!file) return;
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
+  const processFiles = (files) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    setImageFiles(prev => [...prev, ...newFiles]);
+    
+    newFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreviews(prev => [...prev, reader.result]);
+      reader.readAsDataURL(file);
+    });
   };
 
-  const handleImageChange = (e) => processFile(e.target.files[0]);
+  const handleImageChange = (e) => processFiles(e.target.files);
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    processFile(e.dataTransfer.files[0]);
+    processFiles(e.dataTransfer.files);
   };
 
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+  const clearImage = (index) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -155,9 +164,16 @@ export default function ProductForm() {
     setError('');
 
     try {
-      let imageUrl = formData.img;
-      if (imageFile) imageUrl = await uploadImage(imageFile);
-      if (!imageUrl) throw new Error('Product image is required');
+      let imageUrls = [];
+      const existingUrls = imagePreviews.filter(p => p.startsWith('http'));
+      imageUrls.push(...existingUrls);
+
+      for (const file of imageFiles) {
+        const url = await uploadImage(file);
+        if (url) imageUrls.push(url);
+      }
+
+      if (imageUrls.length === 0 && !isEditing) throw new Error('At least one product image is required');
 
       const payload = {
         ...formData,
@@ -166,7 +182,8 @@ export default function ProductForm() {
         brand: formData.brand || '',
         description: formData.description || '',
         tag: formData.tag || '',
-        img: imageUrl,
+        img: imageUrls[0] || '',
+        images: imageUrls,
         featured: formData.featured,
         featuredPosition: formData.featured ? Number(positionInput) || 0 : '',
         items_left: Number(formData.items_left || 0),
@@ -222,7 +239,6 @@ export default function ProductForm() {
   };
 
   const catColor = CATEGORY_COLORS[formData.category] || CATEGORY_COLORS['Air Conditioners'];
-  const currentImg = imagePreview || formData.img;
   const hasDiscount = formData.pss && formData.price && Number(formData.pss) < Number(formData.price);
   const discountPct = hasDiscount
     ? Math.round(100 - (Number(formData.pss) / Number(formData.price)) * 100)
@@ -270,14 +286,18 @@ export default function ProductForm() {
               {isEditing ? '✏️ Edit Product' : '✨ Add New Product'}
             </h1>
           </div>
-          {currentImg && (
-            <div style={{
-              width: 64, height: 64, borderRadius: 12,
-              border: '2px solid rgba(255,255,255,0.2)',
-              overflow: 'hidden', background: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <img src={currentImg} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {imagePreviews.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {imagePreviews.slice(0, 3).map((img, i) => (
+                <div key={i} style={{ width: '48px', height: '48px', borderRadius: '12px', border: '2px solid rgba(255,255,255,0.2)', overflow: 'hidden', background: '#fff', flexShrink: 0 }}>
+                  <img src={img} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ))}
+              {imagePreviews.length > 3 && (
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#1a1a2e', border: '2px solid rgba(255,255,255,0.2)' }}>
+                  +{imagePreviews.length - 3}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -499,7 +519,7 @@ export default function ProductForm() {
             </div>
 
             {/* Image Upload */}
-            <FieldGroup label="Product Image" icon={<ImageIcon size={14} />} accent="#f59e0b">
+            <FieldGroup label={`Product Images (${imagePreviews.length})`} icon={<ImageIcon size={14} />} accent="#f59e0b">
               <div
                 onDrop={handleDrop}
                 onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -508,70 +528,53 @@ export default function ProductForm() {
                 style={{
                   border: `2px dashed ${dragOver ? '#f59e0b' : '#d1d5db'}`,
                   borderRadius: 14,
-                  padding: currentImg ? 16 : 40,
+                  padding: 40,
                   background: dragOver ? 'rgba(245,158,11,0.06)' : '#fafafa',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   display: 'flex',
-                  flexDirection: currentImg ? 'row' : 'column',
+                  flexDirection: 'column',
                   alignItems: 'center',
-                  justifyContent: currentImg ? 'flex-start' : 'center',
-                  gap: 16,
-                  position: 'relative'
+                  justifyContent: 'center',
+                  gap: 16
                 }}
               >
-                {currentImg ? (
-                  <>
-                    <div style={{
-                      width: 80, height: 80, borderRadius: 10, overflow: 'hidden',
-                      border: '2px solid #e5e7eb', flexShrink: 0,
-                      background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <img src={currentImg} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                    <div>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: '#111827' }}>
-                        {imageFile ? imageFile.name : 'Current Image'}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>Click or drop to replace</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); clearImage(); }}
-                      style={{
-                        position: 'absolute', top: 10, right: 10,
-                        width: 26, height: 26, borderRadius: 99,
-                        background: '#dc2626', color: '#fff', border: 'none',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                      }}
-                    >
-                      <X size={13} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{
-                      width: 56, height: 56, borderRadius: 12,
-                      background: 'linear-gradient(135deg,#fef3c7,#fde68a)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <Upload size={24} color="#f59e0b" />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#374151' }}>
-                        Drop image here or <span style={{ color: '#f59e0b', textDecoration: 'underline' }}>browse</span>
-                      </p>
-                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>PNG, JPG, WEBP up to 10MB</p>
-                    </div>
-                  </>
-                )}
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'linear-gradient(135deg,#fef3c7,#fde68a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Upload size={24} color="#f59e0b" />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#374151' }}>
+                    Drop images here or <span style={{ color: '#f59e0b', textDecoration: 'underline' }}>browse</span>
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>Upload multiple PNG, JPG, WEBP up to 10MB each</p>
+                </div>
               </div>
               <input
                 ref={fileInputRef}
-                type="file" accept="image/*"
+                type="file" accept="image/*" multiple
                 onChange={handleImageChange}
                 style={{ display: 'none' }}
               />
+
+              {imagePreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', padding: '12px 0' }}>
+                  {imagePreviews.map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '2px solid #e5e7eb', flexShrink: 0 }}>
+                      <img src={img} alt={`Preview ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); clearImage(idx); }}
+                        style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', borderRadius: '50%', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <X size={10} />
+                      </button>
+                      {idx === 0 && (
+                        <div style={{ position: 'absolute', bottom: '0', left: '0', right: '0', background: '#f59e0b', color: '#fff', fontSize: '9px', fontWeight: 800, textAlign: 'center', padding: '2px' }}>MAIN</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </FieldGroup>
 
             {/* Featured toggle */}

@@ -21,6 +21,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeThumb, setActiveThumb] = useState(0);
 
   const [showInstallment, setShowInstallment] = useState(false);
   const [installments, setInstallments] = useState(2);
@@ -87,6 +88,10 @@ export default function ProductDetail() {
   const rate        = INTEREST[installments] / 100;
   const total       = price * (1 + rate);
   
+  const productImages = product.images && product.images.length > 0
+    ? product.images
+    : (product.img ? [product.img] : []);
+  
   const totalPeriods = paymentFrequency === 'weekly' ? installments * 4 : installments;
   const periodPayment = total / totalPeriods;
   const interestAmt = total - price;
@@ -123,12 +128,28 @@ export default function ProductDetail() {
           
           {/* Image Column */}
           <div className="w-full lg:w-1/2 flex-shrink-0 relative">
-            <div className="sticky top-8 bg-gray-50 border border-gray-100 rounded-sm p-8 flex items-center justify-center min-h-[400px] lg:min-h-[500px]">
-              <img src={product.img} alt={product.name} loading="lazy" decoding="async" className="max-w-full max-h-[450px] object-contain mix-blend-multiply drop-shadow-xl hover:scale-105 transition-transform duration-500" />
-              {product.featured && (
-                <span className="absolute top-4 left-4 bg-zeal-red text-white text-[10px] font-black px-3 py-1.5 rounded-sm uppercase tracking-widest shadow-md">
-                  Featured
-                </span>
+            <div className="sticky top-8">
+              <div className="bg-gray-50 border border-gray-100 rounded-sm p-8 flex items-center justify-center min-h-[400px] lg:min-h-[500px] mb-4 relative">
+                <img src={productImages[activeThumb]} alt={product.name} loading="lazy" decoding="async" className="max-w-full max-h-[450px] object-contain mix-blend-multiply drop-shadow-xl hover:scale-105 transition-transform duration-500" />
+                {product.featured && (
+                  <span className="absolute top-4 left-4 bg-zeal-red text-white text-[10px] font-black px-3 py-1.5 rounded-sm uppercase tracking-widest shadow-md">
+                    Featured
+                  </span>
+                )}
+              </div>
+              
+              {productImages.length > 1 && (
+                <div className="flex gap-4 overflow-x-auto py-2 px-1 scrollbar-hide">
+                  {productImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveThumb(idx)}
+                      className={`w-20 h-20 rounded-sm border-2 overflow-hidden flex-shrink-0 transition-all ${activeThumb === idx ? 'border-zeal-blue scale-105 shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
+                    >
+                      <img src={img} alt={`${product.name} thumbnail ${idx+1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
