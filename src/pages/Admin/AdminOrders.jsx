@@ -128,6 +128,57 @@ export default function AdminOrders() {
     }
   };
 
+  const handleInstallmentReceiptStatus = async (orderId, order, receiptIdx, status) => {
+    if (updating) return;
+
+    if (status === 'Rejected') {
+      const reason = prompt('Enter rejection reason (e.g. "Amount wrong", "Unclear image"):');
+      if (!reason || !reason.trim()) return;
+      setUpdating(true);
+      try {
+        const updatedReceipts = [...(order.installmentReceipts || [])];
+        updatedReceipts[receiptIdx] = { ...updatedReceipts[receiptIdx], status: 'Rejected', rejectReason: reason.trim() };
+        await updateDoc(doc(db, 'orders', orderId), {
+          installmentReceipts: updatedReceipts,
+          status: 'Processing (Installments)'
+        });
+        alert('Installment receipt rejected.');
+      } catch (e) {
+        alert('Failed to reject installment receipt.');
+      } finally {
+        setUpdating(false);
+      }
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const receipt = order.installmentReceipts[receiptIdx];
+      const approvedAmount = Number(receipt.amount) || 0;
+      const newAmountPaid = (order.amountPaid || 0) + approvedAmount;
+      const newStatus = newAmountPaid >= order.totalAmount ? 'Completed' : 'Processing (Installments)';
+
+      const updatedReceipts = [...(order.installmentReceipts || [])];
+      updatedReceipts[receiptIdx] = { ...updatedReceipts[receiptIdx], status: 'Approved' };
+
+      await updateDoc(doc(db, 'orders', orderId), {
+        installmentReceipts: updatedReceipts,
+        amountPaid: newAmountPaid,
+        status: newStatus
+      });
+
+      if (newAmountPaid >= order.totalAmount) {
+        setNewlyCompleted(prev => new Set([...prev, orderId]));
+      }
+
+      alert(`Installment approved! ${fmt(approvedAmount)} added. New total paid: ${fmt(newAmountPaid)}.`);
+    } catch (e) {
+      alert('Failed to approve installment receipt.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleShipOrder = async (orderId, customerEmail) => {
     if (!window.confirm("Are you sure you want to mark this order as Shipped? This will generate a rider token and start the delivery timer.")) return;
     setUpdating(true);
@@ -478,6 +529,44 @@ export default function AdminOrders() {
                           </div>
                         </div>
                       )}
+
+      {/* Installment Receipts */}
+      {order.installmentReceipts && order.installmentReceipts.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm mb-5">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-200 pb-2">
+            Installment Receipts ({order.installmentReceipts.length})
+          </div>
+          <div className="flex flex-col gap-3">
+            {order.installmentReceipts.map((rec, rIdx) => (
+              <div key={rIdx} className={`bg-white border rounded-sm p-3 ${rec.status === 'Approved' ? 'border-green-200' : rec.status === 'Rejected' ? 'border-red-200' : 'border-amber-200'}`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-gray-700">Payment #{rIdx + 1} — {fmt(rec.amount || 0)}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wider ${
+                    rec.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                    rec.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>{rec.status || 'Pending'}</span>
+                </div>
+                <div className="w-full h-24 bg-gray-100 rounded-sm overflow-hidden mb-2 border border-gray-200">
+                  <img src={rec.receiptUrl} alt={`Installment receipt ${rIdx + 1}`} className="w-full h-full object-cover" />
+                </div>
+                <a href={rec.receiptUrl} target="_blank" rel="noopener noreferrer" className="block text-center text-[10px] font-bold text-white bg-zeal-dark hover:bg-black px-3 py-1.5 rounded-sm transition-colors mb-2 w-full">
+                  View Full Receipt
+                </a>
+                {(!rec.status || rec.status === 'Pending') && (
+                  <div className="flex gap-2">
+                    <button onClick={() => handleInstallmentReceiptStatus(order.id, order, rIdx, 'Approved')} disabled={updating} className="flex-1 text-[10px] font-bold text-black bg-green-400 hover:bg-green-500 px-3 py-1.5 rounded-sm transition-colors disabled:opacity-50">Approve + Add to Paid</button>
+                    <button onClick={() => handleInstallmentReceiptStatus(order.id, order, rIdx, 'Rejected')} disabled={updating} className="flex-1 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-sm transition-colors disabled:opacity-50">Reject</button>
+                  </div>
+                )}
+                {rec.status === 'Rejected' && rec.rejectReason && (
+                  <div className="text-[10px] text-red-500 font-medium italic mt-1">Reason: {rec.rejectReason}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
                       {!isComplete && nextPaymentDate && (
                         <div className="bg-blue-50 border border-blue-100 p-4 rounded-sm text-center mb-5">
