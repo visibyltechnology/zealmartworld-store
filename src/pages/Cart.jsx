@@ -59,6 +59,8 @@ export default function Cart() {
   const [verifyingPhone, setVerifyingPhone] = useState(false);
   const phoneVerifiedForCart = true;
   const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState({ terms: false, privacy: false });
+  const [activeLegal, setActiveLegal] = useState(null);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -307,6 +309,13 @@ export default function Cart() {
       return;
     }
     if (items.length === 0) return;
+    
+    if (!termsAccepted.terms || !termsAccepted.privacy) {
+      toast.error('Please read and accept both the Terms & Conditions and Privacy Policy.');
+      setError('Please read and accept both the Terms & Conditions and Privacy Policy.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -872,6 +881,17 @@ export default function Cart() {
                     {payMethod === 'bank_transfer' && (
                       <div className="mb-6 p-4 border border-gray-200 bg-white rounded-sm">
                         <h4 className="font-bold text-gray-900 text-sm mb-3">Bank Account Details</h4>
+                        
+                        {(() => {
+                          const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+                          const totalWithDelivery = totalToPayNow + deliveryDetails.price;
+                          return (
+                            <p className="text-sm text-gray-600 mb-4">
+                              Please transfer the exact amount of <strong className="text-gray-900">{fmt(totalWithDelivery)}</strong> to any of the accounts below. Your order will not be processed until we receive payment.
+                            </p>
+                          );
+                        })()}
+
                         <div className="bg-gray-50 p-3 rounded-sm mb-4 text-sm flex flex-col gap-2">
                           <div className="flex justify-between"><span className="text-gray-500">Bank Name</span><span className="font-bold">Fcmb</span></div>
                           <div className="flex justify-between"><span className="text-gray-500">Account Name</span><span className="font-bold">Zealmart Nigeria Limited</span></div>
@@ -900,7 +920,42 @@ export default function Cart() {
                       </div>
                     )}
 
-                    <div className="flex gap-4 mt-8">
+                    {/* Terms Checkboxes */}
+                    <div className="flex flex-col gap-3 mt-6 mb-6">
+                      <div onClick={() => !termsAccepted.terms && setActiveLegal('terms')} className={`flex items-start gap-3 p-4 rounded-sm border cursor-pointer transition-colors ${termsAccepted.terms ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 ${termsAccepted.terms ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300 bg-transparent'}`}>
+                          {termsAccepted.terms && <i className="fas fa-check text-xs"></i>}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-sm font-bold m-0 ${termsAccepted.terms ? 'text-green-700' : 'text-gray-900'}`}>
+                            I have read and accept the <span className="text-zeal-blue underline" onClick={(e) => { e.stopPropagation(); setActiveLegal('terms'); }}>Terms & Conditions</span> including the No-Return & No-Refund policy.
+                          </p>
+                          {termsAccepted.terms ? (
+                            <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mt-1">✓ Accepted</p>
+                          ) : (
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Click to read & accept</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div onClick={() => !termsAccepted.privacy && setActiveLegal('privacy')} className={`flex items-start gap-3 p-4 rounded-sm border cursor-pointer transition-colors ${termsAccepted.privacy ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 ${termsAccepted.privacy ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300 bg-transparent'}`}>
+                          {termsAccepted.privacy && <i className="fas fa-check text-xs"></i>}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-sm font-bold m-0 ${termsAccepted.privacy ? 'text-green-700' : 'text-gray-900'}`}>
+                            I have read and accept the <span className="text-zeal-blue underline" onClick={(e) => { e.stopPropagation(); setActiveLegal('privacy'); }}>Privacy Policy</span> and consent to data processing under Nigerian NDPR.
+                          </p>
+                          {termsAccepted.privacy ? (
+                            <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mt-1">✓ Accepted</p>
+                          ) : (
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Click to read & accept</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4 mt-2">
                       <button onClick={() => setShowPreview(false)} disabled={loading}
                         className="flex-1 bg-white border-2 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold py-3 rounded-sm text-sm uppercase tracking-widest transition-colors">
                         Cancel
@@ -960,6 +1015,51 @@ export default function Cart() {
         }
         return null;
       })()}
+
+      {/* Legal Modal */}
+      {activeLegal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white border border-gray-200 rounded-sm w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden relative">
+            <div className="bg-zeal-dark text-white px-6 py-4 flex justify-between items-center">
+              <h3 className="font-display font-black text-lg uppercase tracking-wider m-0">
+                {activeLegal === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+              </h3>
+              <button onClick={() => setActiveLegal(null)} className="text-gray-400 hover:text-white transition-colors">
+                <i className="fas fa-times text-lg"></i>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto text-sm text-gray-600 leading-relaxed">
+              {activeLegal === 'terms' ? (
+                <>
+                  <p className="mb-4">By proceeding, you agree to Zealmart's terms of service. All purchases are final once delivered and verified in good condition.</p>
+                  <h4 className="font-bold text-gray-900 mb-2">No-Return & No-Refund Policy</h4>
+                  <p>Please note that we operate a strict No-Return and No-Refund policy. Once an item is purchased and collected/delivered, it cannot be returned for a refund or exchanged unless it is Dead On Arrival (DOA) and verified by our team within 24 hours of delivery.</p>
+                </>
+              ) : (
+                <>
+                  <p className="mb-4">We value your privacy and are committed to protecting your personal data in accordance with the Nigerian Data Protection Regulation (NDPR).</p>
+                  <h4 className="font-bold text-gray-900 mb-2">Data Processing Consent</h4>
+                  <p>By accepting this policy, you consent to our collection, use, and processing of your personal information (including name, phone, address, and email) solely for the purpose of fulfilling your order, providing customer support, and occasionally sending you updates about our services.</p>
+                </>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-4">
+              <button 
+                onClick={() => {
+                  if (activeLegal === 'terms') setTermsAccepted(p => ({...p, terms: true}));
+                  if (activeLegal === 'privacy') setTermsAccepted(p => ({...p, privacy: true}));
+                  setActiveLegal(null);
+                }} 
+                className="w-full bg-zeal-blue hover:bg-blue-900 text-white font-black py-4 rounded-sm text-sm uppercase tracking-widest transition-all shadow-md flex justify-center items-center"
+              >
+                I Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );

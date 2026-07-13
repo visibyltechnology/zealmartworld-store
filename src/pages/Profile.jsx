@@ -8,6 +8,8 @@ import { Package, Clock, CheckCircle, ShoppingBag, Search, ChevronDown, ChevronU
 import toast from 'react-hot-toast';
 import { createPaymentSuccessNotification } from '../utils/notificationService';
 import { hashOTP, verifyOTPHash } from '../utils/otpService';
+import { uploadImage } from '../utils/uploadImage';
+import { Upload } from 'lucide-react';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -31,6 +33,8 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [customAmounts, setCustomAmounts] = useState({});
+  const [receiptFiles, setReceiptFiles] = useState({});
+  const [receiptPreviews, setReceiptPreviews] = useState({});
 
   // Filtering, Sorting & Collapse State
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,90 +86,67 @@ export default function Profile() {
     };
   }, [user]);
 
+  const handleReceiptChange = (orderId, e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReceiptFiles(prev => ({ ...prev, [orderId]: file }));
+      const reader = new FileReader();
+      reader.onloadend = () => setReceiptPreviews(prev => ({ ...prev, [orderId]: reader.result }));
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleContinuePayment = async (order, amountToPay) => {
     if (!user) return;
     
-    const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
-    if (!koraKey) {
-      toast.error("Payment gateway not configured");
+    const receiptFile = receiptFiles[order.id];
+    if (!receiptFile) {
+      toast.error('Please upload your payment receipt before submitting.');
       return;
     }
 
     setLoading(true);
+    toast.success('Uploading receipt, please wait...');
 
     try {
-      window.Korapay.initialize({
-        key: koraKey,
-        reference: `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: Math.round(amountToPay),
-        currency: "NGN",
-        customer: {
-            name: user.displayName || user.email.split('@')[0],
-            email: user.email
-        },
-        onSuccess: async function(response) {
-            toast.success("Verifying payment...");
-            
-            try {
-              const verifyRes = await fetch('/api/verify-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reference: response.reference })
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok || !verifyData.verified) {
-                toast.error('Payment verification failed.');
-                setLoading(false);
-                return;
-              }
-            } catch (verifyErr) {
-              console.warn('Payment verification API unreachable (dev mode):', verifyErr);
-            }
+      const receiptUrl = await uploadImage(receiptFile);
+      
+      const newReceipt = {
+        receiptUrl,
+        amount: amountToPay,
+        status: 'Pending',
+        uploadedAt: new Date().toISOString()
+      };
+      
+      const orderRef = doc(db, 'orders', order.id);
+      
+      // Keep track of all installment receipts
+      const currentReceipts = order.installmentReceipts || [];
+      const updatedReceipts = [...currentReceipts, newReceipt];
 
-            try {
-              const orderRef = doc(db, 'orders', order.id);
-              const newAmountPaid = order.amountPaid + amountToPay;
-              await updateDoc(orderRef, {
-                amountPaid: newAmountPaid,
-                status: (newAmountPaid >= order.totalAmount) ? 'Completed' : 'Processing (Installments)'
-              });
-              
-              if (user?.uid) {
-                const remainingBalance = order.totalAmount - newAmountPaid;
-                const paymentFreq = order.items?.find(i => i.paymentFrequency)?.paymentFrequency;
-                await createPaymentSuccessNotification(user.uid, order.id, amountToPay, {
-                  itemCount: order.items?.length || 1,
-                  remainingBalance: remainingBalance,
-                  paymentFrequency: paymentFreq
-                });
-              }
-
-              toast.success('Payment recorded successfully!');
-              
-              setCustomAmounts(prev => {
-                const next = { ...prev };
-                delete next[order.id];
-                return next;
-              });
-            } catch (err) {
-              console.error("Error updating order:", err);
-              toast.error("Payment successful but failed to update order record.");
-            } finally {
-              setLoading(false);
-            }
-        },
-        onClose: function() {
-            setLoading(false);
-            toast.error("Payment was cancelled.");
-        },
-        onFailed: function(response) {
-            setLoading(false);
-            toast.error(response?.data?.message || "Payment failed. Please try again.");
-        }
+      await updateDoc(orderRef, {
+        installmentReceipts: updatedReceipts,
+        status: 'Processing (Installments) - Review Pending'
       });
+      
+      toast.success('Payment receipt uploaded successfully! Awaiting admin review.');
+      
+      // Clear the file selection for this order
+      setReceiptFiles(prev => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
+      setReceiptPreviews(prev => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
+
     } catch (err) {
-      console.error("Error initializing payment:", err);
-      toast.error("Failed to initialize payment gateway.");
+      console.error("Error uploading receipt:", err);
+      toast.error("Failed to upload receipt. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -492,59 +473,85 @@ export default function Profile() {
 
                                   {!isComplete && (
                                     <div className="flex flex-col gap-3">
-                                      <button
-                                        onClick={() => handleContinuePayment(order, defaultCustomAmount)}
-                                        disabled={loading}
-                                        className="w-full bg-zeal-blue hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-sm text-sm uppercase tracking-wider transition-colors disabled:opacity-70 shadow-md flex items-center justify-center gap-2"
-                                      >
-                                        {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-credit-card"></i>}
-                                        Pay {fmt(defaultCustomAmount)}
-                                      </button>
-                                      
-                                      <div className="relative flex items-center py-2">
-                                        <div className="flex-grow border-t border-gray-200"></div>
-                                        <span className="flex-shrink-0 mx-4 text-xs font-bold text-gray-400 uppercase">OR CUSTOM</span>
-                                        <div className="flex-grow border-t border-gray-200"></div>
-                                      </div>
-
-                                      <div className="flex gap-2">
-                                        <div className="relative flex-grow">
-                                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₦</span>
-                                          <input
-                                            type="number"
-                                            value={currentCustomAmount}
-                                            onChange={(e) => {
-                                              const newAmount = Number(e.target.value);
-                                              const remainingBalance = balance - newAmount;
-                                              
-                                              // Prevent leaving balance below ₦1,000 (unless balance is fully paid)
-                                              if (remainingBalance > 0 && remainingBalance < 1000) {
-                                                // Auto-adjust to pay full amount or min ₦1,000 remaining
-                                                const adjusted = Math.max(balance - 1000, 0);
-                                                setCustomAmounts(prev => ({ ...prev, [order.id]: adjusted }));
-                                              } else {
-                                                setCustomAmounts(prev => ({ ...prev, [order.id]: newAmount }));
-                                              }
-                                            }}
-                                            max={balance}
-                                            min={1}
-                                            className="w-full pl-7 pr-3 py-2.5 bg-white border border-gray-300 rounded-sm text-sm font-bold focus:border-zeal-blue outline-none transition-colors"
-                                          />
+                                      {order.status === 'Processing (Installments) - Review Pending' ? (
+                                        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-sm text-xs font-bold text-center">
+                                          <i className="fas fa-clock mr-1"></i> Receipt uploaded. Awaiting admin verification.
                                         </div>
-                                        <button
-                                          onClick={() => handleContinuePayment(order, currentCustomAmount)}
-                                          disabled={loading || currentCustomAmount <= 0 || currentCustomAmount > balance}
-                                          className="bg-gray-800 hover:bg-black text-white px-4 rounded-sm text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
-                                        >
-                                          Pay
-                                        </button>
-                                      </div>
+                                      ) : (
+                                        <>
+                                          <div className="bg-gray-50 border border-gray-200 p-3 rounded-sm mb-2">
+                                            <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">
+                                              Transfer to this account
+                                            </div>
+                                            <div className="text-xs mb-1 flex justify-between"><span className="text-gray-500">Bank Name</span><span className="font-bold">Fcmb</span></div>
+                                            <div className="text-xs mb-1 flex justify-between"><span className="text-gray-500">Account Name</span><span className="font-bold">Zealmart Nigeria Limited</span></div>
+                                            <div className="text-xs flex justify-between"><span className="text-gray-500">Account No.</span><span className="font-bold text-zeal-red tracking-wider">2694858010</span></div>
+                                            
+                                            <div className="mt-2 text-xs mb-1 flex justify-between"><span className="text-gray-500">Bank Name</span><span className="font-bold">Access Bank</span></div>
+                                            <div className="text-xs mb-1 flex justify-between"><span className="text-gray-500">Account Name</span><span className="font-bold">Zealmart Nigeria Limited</span></div>
+                                            <div className="text-xs flex justify-between"><span className="text-gray-500">Account No.</span><span className="font-bold text-zeal-red tracking-wider">0050196851</span></div>
+                                          </div>
+                                          
+                                          <p className="text-[11px] font-bold text-gray-500 leading-tight">
+                                            Transfer exactly <strong className="text-gray-900">{fmt(defaultCustomAmount)}</strong> or your agreed amount, then upload your receipt below.
+                                          </p>
 
-                                      {/* Helper text for custom payment rules */}
-                                      {balance > 1000 && (
-                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider text-center mt-2">
-                                          ⓘ Remaining balance must be ≥ ₦1,000 or fully paid
-                                        </div>
+                                          <div className="flex gap-2 mb-2">
+                                            <div className="relative flex-grow">
+                                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₦</span>
+                                              <input
+                                                type="number"
+                                                value={currentCustomAmount}
+                                                onChange={(e) => {
+                                                  const newAmount = Number(e.target.value);
+                                                  const remainingBalance = balance - newAmount;
+                                                  
+                                                  // Prevent leaving balance below ₦1,000 (unless balance is fully paid)
+                                                  if (remainingBalance > 0 && remainingBalance < 1000) {
+                                                    // Auto-adjust to pay full amount or min ₦1,000 remaining
+                                                    const adjusted = Math.max(balance - 1000, 0);
+                                                    setCustomAmounts(prev => ({ ...prev, [order.id]: adjusted }));
+                                                  } else {
+                                                    setCustomAmounts(prev => ({ ...prev, [order.id]: newAmount }));
+                                                  }
+                                                }}
+                                                max={balance}
+                                                min={1}
+                                                className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-sm text-sm font-bold focus:border-zeal-blue outline-none transition-colors"
+                                              />
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Helper text for custom payment rules */}
+                                          {balance > 1000 && (
+                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                              ⓘ Remaining balance must be ≥ ₦1,000 or fully paid
+                                            </div>
+                                          )}
+                                          
+                                          <div className="flex items-center gap-2">
+                                            <label className="flex-1 bg-white border border-dashed border-gray-300 p-2 rounded-sm text-center cursor-pointer hover:border-zeal-blue transition-colors flex items-center justify-center gap-2">
+                                              <Upload size={14} className="text-gray-400" />
+                                              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Select Receipt</span>
+                                              <input type="file" accept="image/*" onChange={(e) => handleReceiptChange(order.id, e)} className="hidden" />
+                                            </label>
+                                            
+                                            {receiptPreviews[order.id] && (
+                                              <div className="w-10 h-10 border border-gray-200 rounded-sm overflow-hidden flex-shrink-0">
+                                                <img src={receiptPreviews[order.id]} alt="Preview" className="w-full h-full object-cover" />
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          <button
+                                            onClick={() => handleContinuePayment(order, currentCustomAmount)}
+                                            disabled={loading || currentCustomAmount <= 0 || currentCustomAmount > balance || !receiptFiles[order.id]}
+                                            className="w-full mt-2 bg-zeal-dark hover:bg-black text-white font-black py-3 rounded-sm text-xs uppercase tracking-widest transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                                          >
+                                            {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-upload"></i>}
+                                            Submit Receipt
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   )}
