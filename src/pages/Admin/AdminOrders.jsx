@@ -93,6 +93,41 @@ export default function AdminOrders() {
     }
   };
 
+  const handleReceiptStatus = async (orderId, status) => {
+    if (updating) return;
+
+    if (status === 'Rejected') {
+      const reason = prompt('Enter reason for rejection (e.g. "Amount too low", "Receipt unclear", "Wrong account"):');
+      if (!reason || !reason.trim()) return;
+      setUpdating(true);
+      try {
+        await updateDoc(doc(db, 'orders', orderId), {
+          initialPaymentStatus: 'Rejected',
+          initialPaymentRejectReason: reason.trim(),
+        });
+        alert('Initial payment rejected. Customer will be notified.');
+      } catch (e) {
+        alert('Failed to reject payment.');
+      } finally {
+        setUpdating(false);
+      }
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateDoc(doc(db, 'orders', orderId), {
+        initialPaymentStatus: 'Approved',
+        initialPaymentRejectReason: null,
+      });
+      alert('Initial payment approved successfully!');
+    } catch (e) {
+      alert('Failed to approve payment.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleShipOrder = async (orderId, customerEmail) => {
     if (!window.confirm("Are you sure you want to mark this order as Shipped? This will generate a rider token and start the delivery timer.")) return;
     setUpdating(true);
@@ -413,13 +448,34 @@ export default function AdminOrders() {
                       
                       {order.receiptUrl && (
                         <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm text-center mb-5">
-                          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">Initial Payment Receipt</div>
+                          <div className="flex justify-between items-center mb-3">
+                            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Initial Payment Receipt</div>
+                            {order.initialPaymentStatus && (
+                              <span className={`text-[11px] font-bold ${order.initialPaymentStatus === 'Approved' ? 'text-green-600' : order.initialPaymentStatus === 'Rejected' ? 'text-red-600' : 'text-amber-600'}`}>
+                                {order.initialPaymentStatus}
+                              </span>
+                            )}
+                          </div>
                           <div className="w-full h-32 bg-gray-100 rounded-sm overflow-hidden mb-3 border border-gray-200">
                             <img src={order.receiptUrl} alt="Receipt Thumbnail" className="w-full h-full object-cover" />
                           </div>
-                          <a href={order.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-[11px] font-bold text-white bg-zeal-dark hover:bg-black px-4 py-2 rounded-full transition-colors">
-                            View Full Receipt
-                          </a>
+                          
+                          <div className="flex flex-col gap-2">
+                            <a href={order.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-[11px] font-bold text-white bg-zeal-dark hover:bg-black px-4 py-2 rounded-full transition-colors w-full">
+                              View Full Receipt
+                            </a>
+                            
+                            {(!order.initialPaymentStatus || order.initialPaymentStatus === 'Pending') && (
+                              <div className="flex gap-2">
+                                <button onClick={() => handleReceiptStatus(order.id, 'Approved')} disabled={updating} className="flex-1 text-[11px] font-bold text-black bg-green-400 hover:bg-green-500 px-4 py-2 rounded-full transition-colors disabled:opacity-50">Approve</button>
+                                <button onClick={() => handleReceiptStatus(order.id, 'Rejected')} disabled={updating} className="flex-1 text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full transition-colors disabled:opacity-50">Reject</button>
+                              </div>
+                            )}
+                            
+                            {order.initialPaymentStatus === 'Rejected' && order.initialPaymentRejectReason && (
+                              <div className="text-[10px] text-red-500 font-medium italic text-left mt-1">Reason: {order.initialPaymentRejectReason}</div>
+                            )}
+                          </div>
                         </div>
                       )}
 
