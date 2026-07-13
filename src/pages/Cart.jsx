@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, ArrowLeft, CreditCard, ShoppingBag } from 'lucide-react';
+import { Trash2, ArrowLeft, CreditCard, ShoppingBag, Upload, Building2, Zap } from 'lucide-react';
+import { uploadImage } from '../utils/uploadImage';
 import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import useCartStore from '../store/useCartStore';
@@ -37,6 +38,9 @@ export default function Cart() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [payMethod, setPayMethod] = useState('bank_transfer');
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState(null);
   const [deliveryInfo, setDeliveryInfo] = useState({
     address: '',
     city: '',
@@ -81,6 +85,15 @@ export default function Cart() {
     fetchUserData();
   }, [user]);
 
+  const handleReceiptChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReceiptFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setReceiptPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
 
   const [showPreview, setShowPreview] = useState(false);
   const [conflictDismissed, setConflictDismissed] = useState(false);
@@ -167,280 +180,221 @@ export default function Cart() {
 
   const totalToPayNow = getInitialPaymentTotal();
 
-  const loadKorapayScript = () => new Promise((resolve, reject) => {
-    if (window.Korapay) { resolve(); return; }
+  const loadKlumpScript = () => new Promise((resolve, reject) => {
+    if (window.Klump) { resolve(); return; }
 
-    // Remove any previously-failed script tag so we can inject a fresh one
-    const existing = document.querySelector('script[data-korapay]');
+    const existing = document.querySelector('script[data-klump]');
     if (existing) existing.remove();
 
     const s = document.createElement('script');
-    s.src = 'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js';
-    s.setAttribute('data-korapay', 'true');
+    s.src = 'https://js.useklump.com/klump.js';
+    s.setAttribute('data-klump', 'true');
     s.onload = () => resolve();
     s.onerror = () => {
-      s.remove(); // clean up so the next attempt starts fresh too
-      reject(new Error('Korapay script failed to load'));
+      s.remove();
+      reject(new Error('Klump script failed to load'));
     };
     document.head.appendChild(s);
   });
+
+  const finalizeOrder = async (paymentRef, receiptUrl = '') => {
+    try {
+      if (splitMode) {
+        const groups = buildGroupMap(expandedItems);
+        const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+        for (const [gId, groupUnits] of Object.entries(groups)) {
+          if (groupUnits.length === 0) continue;
+          const merged = {};
+          groupUnits.forEach(unit => {
+            if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
+            merged[unit.cartItemId].quantity += 1;
+          });
+          const groupItems = Object.values(merged);
+          const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
+          const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0) + deliveryDetails.price;
+
+          for (const item of groupItems) {
+            try {
+              await decreaseInventory(item.id, Number(item.quantity));
+            } catch (inventoryErr) {
+              console.error('Error updating inventory for item:', item.id, inventoryErr);
+            }
+          }
+
+          const orderRef = await addDoc(collection(db, "orders"), {
+            ...initializeOrderTracking({
+              userId: user.uid,
+              items: groupItems,
+              deliveryInfo: deliveryInfo,
+              deliveryFee: deliveryDetails.price,
+              totalAmount: groupTotalAmount,
+              amountPaid: groupTotalToPayNow,
+              status: 'Processing',
+              paymentRef: paymentRef || `REF_${Date.now()}_G${gId}`,
+              createdAt: new Date(),
+            }),
+            receiptUrl
+          });
+
+          try {
+            await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
+            const remainingBalance = groupTotalAmount - groupTotalToPayNow;
+            const paymentFreq = groupItems.find(i => i.paymentFrequency)?.paymentFrequency;
+            await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow, {
+              itemCount: groupItems.length,
+              remainingBalance: remainingBalance,
+              paymentFrequency: paymentFreq
+            });
+          } catch (notifErr) {
+            console.error('Error creating notifications:', notifErr);
+          }
+        }
+      } else {
+        const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+        for (const item of items) {
+          try {
+            await decreaseInventory(item.id, Number(item.quantity));
+          } catch (inventoryErr) {
+            console.error('Error updating inventory for item:', item.id, inventoryErr);
+          }
+        }
+
+        const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
+        const orderRef = await addDoc(collection(db, "orders"), {
+          ...initializeOrderTracking({
+            userId: user.uid,
+            items: items,
+            deliveryInfo: deliveryInfo,
+            deliveryFee: deliveryDetails.price,
+            totalAmount: orderTotalAmount,
+            amountPaid: totalToPayNow + deliveryDetails.price,
+            status: 'Processing',
+            paymentRef: paymentRef || `REF_${Date.now()}`,
+            createdAt: new Date(),
+          }),
+          receiptUrl
+        });
+
+        try {
+          await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
+          const remainingBalance = orderTotalAmount - (totalToPayNow + deliveryDetails.price);
+          const paymentFreq = items.find(i => i.paymentFrequency)?.paymentFrequency;
+          await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow + deliveryDetails.price, {
+            itemCount: items.length,
+            remainingBalance: remainingBalance,
+            paymentFrequency: paymentFreq
+          });
+        } catch (notifErr) {
+          console.error('Error creating notifications:', notifErr);
+        }
+      }
+
+      clearCart();
+      toast.success('Order placed successfully!');
+      setShowPreview(false);
+      setLoading(false);
+      navigate('/profile');
+    } catch (err) {
+      console.error("Error saving order:", err);
+      setError("Payment successful but failed to save order. Please contact support.");
+      setLoading(false);
+    }
+  };
 
   const handleCheckout = async () => {
     if (!user) {
       navigate('/login');
       return;
     }
-
     if (items.length === 0) return;
     setLoading(true);
     setError('');
 
-    try {
-      const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
-      if (!koraKey) {
-        toast.error('Payment key is missing. Please contact support.');
+    const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+    let paymentAmount = Math.ceil(totalToPayNow + deliveryDetails.price);
+    const MINIMUM_PAYMENT = 1000;
+    if (paymentAmount < MINIMUM_PAYMENT && paymentAmount > 0) paymentAmount = MINIMUM_PAYMENT;
+    const paymentRef = `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    if (payMethod === 'bank_transfer') {
+      if (!receiptFile) {
+        toast.error('Please upload your payment receipt.');
+        setError('Please upload your payment receipt.');
         setLoading(false);
         return;
       }
-
-      // Ensure Korapay script is loaded (handles race-condition on first load)
+      toast.success("Uploading receipt and processing order...");
       try {
-        await loadKorapayScript();
-      } catch {
-        toast.error('Could not load payment gateway. Check your connection and try again.');
+        const receiptUrl = await uploadImage(receiptFile);
+        await finalizeOrder(paymentRef, receiptUrl);
+      } catch (uploadErr) {
+        toast.error('Failed to upload receipt. Please try again.');
+        setError('Failed to upload receipt.');
         setLoading(false);
-        return;
       }
+      return;
+    }
 
-      if (!window.Korapay) {
-        toast.error('Payment gateway failed to initialise. Please refresh and try again.');
-        setLoading(false);
-        return;
-      }
-
-      let paymentProcessed = false;
-
-      // Safety timeout — if Korapay never fires any callback, reset after 90s
-      const safetyTimer = setTimeout(() => {
-        if (!paymentProcessed) setLoading(false);
-      }, 90000);
-
-      // Check if any items are installment payments (need tokenization)
-      const hasInstallments = items.some(i => i.paymentChoice === 'installment');
-      
-      const paymentRef = `ZEAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
-      let paymentAmount = Math.round(totalToPayNow + deliveryDetails.price);
-      
-      // Korapay minimum: ₦1,000 (already guaranteed by store, but round up any remaining kobo)
-      const MINIMUM_PAYMENT = 1000;
-      
-      // Round up any kobo amounts to full naira (₦X.50 → ₦X+1)
-      paymentAmount = Math.ceil(paymentAmount);
-      
-      // Ensure minimum ₦1,000 (store should guarantee this, but double-check)
-      if (paymentAmount < MINIMUM_PAYMENT && paymentAmount > 0) {
-        paymentAmount = MINIMUM_PAYMENT;
-      }
-      
-      // Log payment details for debugging
-      console.log('Korapay Payment Details:', {
-        reference: paymentRef,
-        amount: paymentAmount,
-        currency: 'NGN',
-        customer: {
-          name: user.displayName || user.email.split('@')[0],
-          email: user.email
-        },
-        hasInstallments
-      });
-
-      // If no valid amount, show error
-      if (paymentAmount <= 0) {
-        setError('Invalid cart total. Please review your items.');
-        toast.error('Invalid payment amount');
-        setLoading(false);
-        return;
-      }
-
-      window.Korapay.initialize({
-        key: koraKey,
-        reference: paymentRef,
-        amount: paymentAmount,
-        currency: "NGN",
-        metadata: {
-          orderId: paymentRef,
-          itemCount: items.length,
-          source: 'web'
-        },
-        customer: {
-            name: user.displayName || user.email.split('@')[0],
-            email: user.email
-        },
-        onSuccess: async function(response) {
-            if (paymentProcessed) return;
-            paymentProcessed = true;
-            clearTimeout(safetyTimer);
-            setLoading(true);
-            toast.success("Verifying payment...");
-
-            // SECURITY: Verify payment server-side before creating order
-            try {
-              const verifyRes = await fetch('/api/verify-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reference: response.reference })
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok || !verifyData.verified) {
-                toast.error('Payment could not be verified. Please contact support.');
-                setError('Payment verification failed. Reference: ' + response.reference);
-                setLoading(false);
-                return;
-              }
-            } catch (verifyErr) {
-              // If verification endpoint is unreachable (e.g. local dev), warn but continue
-              console.warn('Payment verification API unreachable, proceeding (dev mode):', verifyErr);
-            }
-
-            toast.success("Payment verified! Processing order...");
-            try {
-              if (splitMode) {
-                const groups = buildGroupMap(expandedItems);
-                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
-                for (const [gId, groupUnits] of Object.entries(groups)) {
-                  if (groupUnits.length === 0) continue;
-                  const merged = {};
-                  groupUnits.forEach(unit => {
-                    if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
-                    merged[unit.cartItemId].quantity += 1;
-                  });
-                  const groupItems = Object.values(merged);
-                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
-                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0) + deliveryDetails.price;
-
-                  for (const item of groupItems) {
-                    try {
-                      await decreaseInventory(item.id, Number(item.quantity));
-                    } catch (inventoryErr) {
-                      console.error('Error updating inventory for item:', item.id, inventoryErr);
-                    }
-                  }
-
-                  const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
-                    userId: user.uid,
-                    items: groupItems,
-                    deliveryInfo: deliveryInfo,
-                    deliveryFee: deliveryDetails.price,
-                    totalAmount: groupTotalAmount,
-                    amountPaid: groupTotalToPayNow,
-                    status: 'Processing',
-                    paymentRef: response.reference || `REF_${Date.now()}_G${gId}`,
-                    createdAt: new Date(),
-                  }));
-
-                  try {
-                    await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
-                    const remainingBalance = groupTotalAmount - groupTotalToPayNow;
-                    const paymentFreq = groupItems.find(i => i.paymentFrequency)?.paymentFrequency;
-                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow, {
-                      itemCount: groupItems.length,
-                      remainingBalance: remainingBalance,
-                      paymentFrequency: paymentFreq
-                    });
-                  } catch (notifErr) {
-                    console.error('Error creating notifications:', notifErr);
-                  }
-                }
-              } else {
-                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
-                for (const item of items) {
-                  try {
-                    await decreaseInventory(item.id, Number(item.quantity));
-                  } catch (inventoryErr) {
-                    console.error('Error updating inventory for item:', item.id, inventoryErr);
-                  }
-                }
-
-                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 2 ? 0.05 : i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0) + deliveryDetails.price;
-                const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
-                  userId: user.uid,
-                  items: items,
-                  deliveryInfo: deliveryInfo,
-                  deliveryFee: deliveryDetails.price,
-                  totalAmount: orderTotalAmount,
-                  amountPaid: totalToPayNow + deliveryDetails.price,
-                  status: 'Processing',
-                  paymentRef: response.reference || `REF_${Date.now()}`,
-                  createdAt: new Date(),
-                }));
-
-                try {
-                  await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
-                  const remainingBalance = orderTotalAmount - (totalToPayNow + deliveryDetails.price);
-                  const paymentFreq = items.find(i => i.paymentFrequency)?.paymentFrequency;
-                  await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow + deliveryDetails.price, {
-                    itemCount: items.length,
-                    remainingBalance: remainingBalance,
-                    paymentFrequency: paymentFreq
-                  });
-                } catch (notifErr) {
-                  console.error('Error creating notifications:', notifErr);
-                }
-              }
-
-              clearCart();
-              toast.success('Order placed successfully!');
-              setShowPreview(false);
-              setLoading(false);
-              navigate('/profile');
-            } catch (err) {
-              console.error("Error saving order:", err);
-              setError("Payment successful but failed to save order. Please contact support.");
-              setLoading(false);
-            }
-        },
-        onClose: function() {
-            clearTimeout(safetyTimer);
-            setLoading(false);
-            if (!paymentProcessed) toast.error("Payment was cancelled.");
-        },
-        onFailed: function(response) {
-            clearTimeout(safetyTimer);
-            setLoading(false);
-            console.error('Korapay Payment Failed:', {
-              response,
-              reference: paymentRef,
-              amount: paymentAmount
-            });
-            const msg = response?.data?.message || response?.message || "Payment failed. Please try again.";
-            toast.error(msg);
-            setError(msg);
-        },
-        onTokenized: async function(response) {
-            // Save the payment token to the user's profile for future installment charges
-            try {
-              if (response?.data?.customer?.token) {
-                const tokenRef = doc(db, 'payment_tokens', user.uid);
-                await setDoc(tokenRef, {
-                  token: response.data.customer.token,
-                  email: user.email,
-                  provider: 'korapay',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }, { merge: true });
-                console.log('Payment token saved for future installments');
-              }
-            } catch (tokenErr) {
-              console.error('Failed to save payment token:', tokenErr);
-            }
+    if (payMethod === 'klump') {
+      try {
+        const klumpKey = import.meta.env.VITE_KLUMP_PUBLIC_KEY;
+        if (!klumpKey) {
+          toast.error('Klump key is missing. Please contact support.');
+          setLoading(false);
+          return;
         }
-      });
-      setLoading(false);
-    } catch (err) {
-      console.error("Error initializing payment:", err);
-      setError("Failed to initialize payment gateway.");
-      setLoading(false);
+
+        try {
+          await loadKlumpScript();
+        } catch {
+          toast.error('Could not load payment gateway.');
+          setLoading(false);
+          return;
+        }
+
+        if (!window.Klump) {
+          toast.error('Klump failed to initialise.');
+          setLoading(false);
+          return;
+        }
+
+        new window.Klump({
+          publicKey: klumpKey,
+          data: {
+            amount: paymentAmount,
+            customer: {
+              email: user.email,
+              phone: deliveryInfo.phone || '08000000000',
+              name: user.displayName || user.email.split('@')[0]
+            },
+            currency: 'NGN',
+            merchant_reference: paymentRef,
+          },
+          onSuccess: (data) => {
+            toast.success("Payment verified! Processing order...");
+            finalizeOrder(data.reference || paymentRef);
+          },
+          onError: (data) => {
+            setLoading(false);
+            console.error('Klump Payment Failed:', data);
+            toast.error('Payment failed. Please try again.');
+          },
+          onLoad: () => {
+            console.log('Klump loaded');
+          },
+          onOpen: () => {
+             console.log('Klump modal opened');
+          },
+          onClose: () => {
+             setLoading(false);
+             toast.error('Payment modal closed.');
+          }
+        });
+      } catch (err) {
+        console.error("Error initializing Klump:", err);
+        setError("Failed to initialize payment gateway.");
+        setLoading(false);
+      }
     }
   };
 
@@ -894,6 +848,57 @@ export default function Cart() {
                         </div>
                       )}
                     </div>
+
+                    <div className="mb-6">
+                      <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-3">Payment Method</h3>
+                      <div className="flex flex-col gap-3">
+                        <label className={`flex items-center gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${payMethod === 'bank_transfer' ? 'border-zeal-red bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                          <input type="radio" name="payMethod" value="bank_transfer" checked={payMethod === 'bank_transfer'} onChange={(e) => setPayMethod(e.target.value)} className="text-zeal-red focus:ring-zeal-red" />
+                          <div>
+                            <div className="font-bold text-gray-900 text-sm flex items-center gap-2"><Building2 size={16} /> Direct Bank Transfer</div>
+                            <div className="text-xs text-gray-500 mt-1">Upload your payment receipt after transferring.</div>
+                          </div>
+                        </label>
+                        <label className={`flex items-center gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${payMethod === 'klump' ? 'border-zeal-red bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                          <input type="radio" name="payMethod" value="klump" checked={payMethod === 'klump'} onChange={(e) => setPayMethod(e.target.value)} className="text-zeal-red focus:ring-zeal-red" />
+                          <div>
+                            <div className="font-bold text-gray-900 text-sm flex items-center gap-2"><Zap size={16} /> Pay with Klump</div>
+                            <div className="text-xs text-gray-500 mt-1">Buy now and pay later in installments.</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {payMethod === 'bank_transfer' && (
+                      <div className="mb-6 p-4 border border-gray-200 bg-white rounded-sm">
+                        <h4 className="font-bold text-gray-900 text-sm mb-3">Bank Account Details</h4>
+                        <div className="bg-gray-50 p-3 rounded-sm mb-4 text-sm flex flex-col gap-2">
+                          <div className="flex justify-between"><span className="text-gray-500">Bank Name</span><span className="font-bold">Fcmb</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Account Name</span><span className="font-bold">Zealmart Nigeria Limited</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Account Number</span><span className="font-bold text-lg tracking-wider text-zeal-red">2694858010</span></div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-sm mb-4 text-sm flex flex-col gap-2">
+                          <div className="flex justify-between"><span className="text-gray-500">Bank Name</span><span className="font-bold">Access Bank</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Account Name</span><span className="font-bold">Zealmart Nigeria Limited</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Account Number</span><span className="font-bold text-lg tracking-wider text-zeal-red">0050196851</span></div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Upload Payment Receipt <span className="text-red-500">*</span></label>
+                          <div className="flex items-center gap-3">
+                            <label className="flex-1 border-2 border-dashed border-gray-300 p-4 rounded-sm text-center cursor-pointer hover:border-zeal-red hover:bg-red-50 transition-colors">
+                              <Upload size={20} className="mx-auto mb-2 text-gray-400" />
+                              <span className="text-xs font-medium text-gray-500">Click to upload receipt</span>
+                              <input type="file" accept="image/*" onChange={handleReceiptChange} className="hidden" />
+                            </label>
+                            {receiptPreview && (
+                              <div className="w-20 h-20 border border-gray-200 rounded-sm overflow-hidden flex-shrink-0">
+                                <img src={receiptPreview} alt="Receipt preview" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex gap-4 mt-8">
                       <button onClick={() => setShowPreview(false)} disabled={loading}

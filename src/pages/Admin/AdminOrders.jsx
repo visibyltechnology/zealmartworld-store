@@ -411,6 +411,18 @@ export default function AdminOrders() {
                         </div>
                       </div>
                       
+                      {order.receiptUrl && (
+                        <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm text-center mb-5">
+                          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">Initial Payment Receipt</div>
+                          <div className="w-full h-32 bg-gray-100 rounded-sm overflow-hidden mb-3 border border-gray-200">
+                            <img src={order.receiptUrl} alt="Receipt Thumbnail" className="w-full h-full object-cover" />
+                          </div>
+                          <a href={order.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-[11px] font-bold text-white bg-zeal-dark hover:bg-black px-4 py-2 rounded-full transition-colors">
+                            View Full Receipt
+                          </a>
+                        </div>
+                      )}
+
                       {!isComplete && nextPaymentDate && (
                         <div className="bg-blue-50 border border-blue-100 p-4 rounded-sm text-center mb-5">
                           <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Next Payment Due</div>
