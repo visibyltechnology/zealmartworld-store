@@ -34,7 +34,6 @@ export default function Login() {
         }
 
         if (userData.isEmailVerified === false) {
-          await auth.signOut();
           setError('Please verify your email before logging in.');
           toast.error('Please verify your email.');
           setLoading(false);

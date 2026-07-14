@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
+import { updateDoc, doc, addDoc, collection, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { sendRegistrationOTPEmail } from '../utils/email';
 import { hashOTP, verifyOTPHash } from '../utils/otpService';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
+import useAuthStore from '../store/useAuthStore';
 
 export default function VerifyOTP() {
   const [searchParams] = useSearchParams();
-  const email = searchParams.get('email');
+  const urlEmail = searchParams.get('email');
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuthStore();
+  const email = user?.email || urlEmail;
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -20,7 +23,8 @@ export default function VerifyOTP() {
   const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
-    if (!email) {
+    if (authLoading) return;
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -28,10 +32,9 @@ export default function VerifyOTP() {
     let interval;
     const fetchTimer = async () => {
       try {
-        const q = query(collection(db, 'users'), where('email', '==', email));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const userData = querySnapshot.docs[0].data();
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
           if (userData.otpExpiresAt) {
             const expiresAt = userData.otpExpiresAt.toDate().getTime();
             
@@ -60,7 +63,7 @@ export default function VerifyOTP() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [email, navigate]);
+  }, [user, authLoading, navigate]);
 
   const formatTime = (seconds) => {
     if (seconds === null) return '';
@@ -91,6 +94,7 @@ export default function VerifyOTP() {
 
   const verifyOTP = async (e) => {
     e.preventDefault();
+    if (!user) return;
     const enteredCode = otp.join('');
     if (enteredCode.length !== 6) {
       setError('Please enter the 6-digit code.');
@@ -102,18 +106,16 @@ export default function VerifyOTP() {
     setError('');
 
     try {
-      const q = query(collection(db, 'users'), where('email', '==', email));
-      const querySnapshot = await getDocs(q);
+      const userDocSnap = await getDoc(doc(db, 'users', user.uid));
 
-      if (querySnapshot.empty) {
+      if (!userDocSnap.exists()) {
         setError('User not found.');
         toast.error('User not found.');
         setLoading(false);
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const userData = userDocSnap.data();
 
       const isValid = await verifyOTPHash(enteredCode, userData.otpCodeHash);
 
@@ -135,14 +137,14 @@ export default function VerifyOTP() {
       }
 
       // Valid OTP
-      await updateDoc(doc(db, 'users', userDoc.id), {
+      await updateDoc(doc(db, 'users', user.uid), {
         isEmailVerified: true,
         otpCodeHash: null,
         otpExpiresAt: null
       });
 
       toast.success('Email successfully verified!');
-      navigate('/login');
+      navigate('/shop');
 
     } catch (err) {
       console.error(err);
@@ -154,26 +156,25 @@ export default function VerifyOTP() {
   };
 
   const handleResend = async () => {
+    if (!user) return;
     setResending(true);
     setError('');
     
     try {
-      const q = query(collection(db, 'users'), where('email', '==', email));
-      const querySnapshot = await getDocs(q);
+      const userDocSnap = await getDoc(doc(db, 'users', user.uid));
 
-      if (querySnapshot.empty) {
+      if (!userDocSnap.exists()) {
         setError('User not found.');
         toast.error('User not found.');
         setResending(false);
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const userData = userDocSnap.data();
 
       if (userData.isEmailVerified) {
         toast.success('Email is already verified.');
-        navigate('/login');
+        navigate('/shop');
         return;
       }
 
@@ -181,7 +182,7 @@ export default function VerifyOTP() {
       const newOtpCodeHash = await hashOTP(newOtpCode);
       const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-      await updateDoc(doc(db, 'users', userDoc.id), {
+      await updateDoc(doc(db, 'users', user.uid), {
         otpCodeHash: newOtpCodeHash,
         otpExpiresAt: newExpiresAt
       });
