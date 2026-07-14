@@ -74,8 +74,6 @@ export default function Register() {
       const otpCodeHash = await hashOTP(otpCode); // SHA-256 hash — never store plain OTP
       const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-      await auth.signOut();
-
       await setDoc(doc(db, "users", user.uid), {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -89,10 +87,11 @@ export default function Register() {
         createdAt: new Date()
       });
 
+      // Sign out AFTER writing the document so Firestore rules (request.auth != null) pass
+      await auth.signOut();
 
-
-        try {
-          const sent = await sendRegistrationOTPEmail(
+      try {
+        const sent = await sendRegistrationOTPEmail(
             formData.email,
             formData.firstName,
             otpCode
