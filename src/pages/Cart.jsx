@@ -399,11 +399,15 @@ export default function Cart() {
           return;
         }
 
+        const shippingFee = deliveryDetails.price || 0;
+        const klumpItemsTotal = items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+        const klumpTotalAmount = klumpItemsTotal + shippingFee;
+
         new KlumpCtor({
           publicKey: klumpKey,
           data: {
-            amount: totalToPayNow,
-            shipping_fee: deliveryDetails.price,
+            amount: klumpTotalAmount,
+            shipping_fee: shippingFee,
             currency: 'NGN',
             redirect_url: `${window.location.origin}/profile`,
             merchant_reference: paymentRef,
