@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, CreditCard, ShoppingBag, Upload, Building2, Zap } from 'lucide-react';
 import { uploadImage } from '../utils/uploadImage';
@@ -61,6 +62,21 @@ export default function Cart() {
   const [saveNewAddress, setSaveNewAddress] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState({ terms: false, privacy: false });
   const [activeLegal, setActiveLegal] = useState(null);
+  const [klumpOpen, setKlumpOpen] = useState(false);
+
+  useEffect(() => {
+    let interval;
+    if (klumpOpen) {
+      interval = setInterval(() => {
+        document.querySelectorAll('iframe[src*="klump"], [id^="klump"]').forEach(el => {
+          if (el.style && el.id !== 'klump__checkout') {
+            el.style.setProperty('z-index', '2147483640', 'important');
+          }
+        });
+      }, 500);
+    }
+    return () => clearInterval(interval);
+  }, [klumpOpen]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -346,63 +362,73 @@ export default function Cart() {
 
     if (payMethod === 'klump') {
       try {
-        const klumpKey = import.meta.env.VITE_KLUMP_PUBLIC_KEY;
-        if (!klumpKey) {
-          toast.error('Klump key is missing. Please contact support.');
-          setLoading(false);
-          return;
-        }
+        const klumpKey = import.meta.env.VITE_KLUMP_PUBLIC_KEY || "klp_pk_0beba19f17814c5688a48c2d444e2e375edda3a32b0e44bc86545733b48e62bb";
+        
+        setLoading(true);
+        setKlumpOpen(true);
 
         try {
           await loadKlumpScript();
         } catch {
           toast.error('Could not load payment gateway.');
           setLoading(false);
+          setKlumpOpen(false);
           return;
         }
 
         if (!window.Klump) {
           toast.error('Klump failed to initialise.');
           setLoading(false);
+          setKlumpOpen(false);
           return;
         }
 
         new window.Klump({
           publicKey: klumpKey,
           data: {
-            amount: paymentAmount,
-            customer: {
+            amount: totalToPayNow,
+            shipping_fee: deliveryDetails.price,
+            currency: 'NGN',
+            redirect_url: `${window.location.origin}/profile`,
+            merchant_reference: paymentRef,
+            meta_data: {
+              customer: user.displayName || user.email.split('@')[0],
               email: user.email,
               phone: deliveryInfo.phone || '08000000000',
-              name: user.displayName || user.email.split('@')[0]
             },
-            currency: 'NGN',
-            merchant_reference: paymentRef,
+            items: items.map((i) => ({
+              image_url: i.img || "",
+              item_url: `${window.location.origin}/product/${i.id}`,
+              name: i.name,
+              unit_price: i.price,
+              quantity: i.quantity,
+            })),
           },
           onSuccess: (data) => {
+            setKlumpOpen(false);
             toast.success("Payment verified! Processing order...");
-            finalizeOrder(data.reference || paymentRef);
+            finalizeOrder(data?.data?.reference || data?.reference || paymentRef);
           },
           onError: (data) => {
             setLoading(false);
+            setKlumpOpen(false);
             console.error('Klump Payment Failed:', data);
             toast.error('Payment failed. Please try again.');
           },
           onLoad: () => {
             console.log('Klump loaded');
           },
-          onOpen: () => {
-             console.log('Klump modal opened');
-          },
           onClose: () => {
-             setLoading(false);
-             toast.error('Payment modal closed.');
+            setLoading(false);
+            setKlumpOpen(false);
+            toast.error('Payment modal closed.');
           }
         });
       } catch (err) {
         console.error("Error initializing Klump:", err);
         setError("Failed to initialize payment gateway.");
         setLoading(false);
+        setKlumpOpen(false);
       }
     }
   };
@@ -425,6 +451,62 @@ export default function Cart() {
 
   return (
     <main className="min-h-screen flex flex-col bg-gray-50">
+      
+      {/* Fixed floating cancel button — always on top of Klump's full-screen overlay */}
+      {klumpOpen && createPortal(
+        <>
+          {/* Top-right button for desktop */}
+          <div className="hidden sm:flex fixed top-0 left-0 right-0 z-[2147483647] justify-end p-4 pointer-events-none">
+            <button
+              onClick={() => {
+                try {
+                  const klumpDiv = document.getElementById('klump__checkout');
+                  if (klumpDiv) klumpDiv.innerHTML = '';
+                  document.querySelectorAll('[id^="klump"]').forEach(el => {
+                    if (el.id !== 'klump__checkout') el.remove();
+                  });
+                  document.querySelectorAll('iframe[src*="klump"]').forEach(el => el.remove());
+                  setKlumpOpen(false);
+                  setLoading(false);
+                  setError('Klump payment cancelled.');
+                } catch(e) {
+                  window.location.reload();
+                }
+              }}
+              className="pointer-events-auto bg-[#B30000] text-white border-none rounded-full px-6 py-3 font-black text-sm cursor-pointer shadow-lg flex items-center gap-2 tracking-wide"
+            >
+              ✕ Cancel Payment
+            </button>
+          </div>
+
+          {/* Bottom sticky bar for mobile */}
+          <div className="flex sm:hidden fixed bottom-0 left-0 right-0 z-[2147483647] p-4 bg-black/85 backdrop-blur-sm justify-center pointer-events-none">
+            <button
+              onClick={() => {
+                try {
+                  const klumpDiv = document.getElementById('klump__checkout');
+                  if (klumpDiv) klumpDiv.innerHTML = '';
+                  document.querySelectorAll('[id^="klump"]').forEach(el => {
+                    if (el.id !== 'klump__checkout') el.remove();
+                  });
+                  document.querySelectorAll('iframe[src*="klump"]').forEach(el => el.remove());
+                  setKlumpOpen(false);
+                  setLoading(false);
+                  setError('Klump payment cancelled.');
+                } catch(e) {
+                  window.location.reload();
+                }
+              }}
+              className="pointer-events-auto w-full max-w-[400px] bg-[#B30000] text-white border-none rounded-full px-8 py-3.5 font-black text-[15px] cursor-pointer shadow-[0_4px_24px_rgba(179,0,0,0.5)] flex items-center justify-center gap-2 tracking-wide"
+            >
+              ✕ Cancel Payment
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+      <div id="klump__checkout" style={{ display: klumpOpen ? 'block' : 'none' }}></div>
+
       <div className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <Link to="/products" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-zeal-red uppercase tracking-wider transition-colors mb-8">
           <ArrowLeft size={16} /> Continue Shopping
