@@ -23,6 +23,28 @@ function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
 }
 
+let klumpScriptPromise = null;
+function loadKlumpScript() {
+  if (klumpScriptPromise) return klumpScriptPromise;
+  klumpScriptPromise = new Promise((resolve, reject) => {
+    const scriptId = "klump-js-script";
+    if (document.getElementById(scriptId)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://js.useklump.com/klump.js";
+    script.onload = () => resolve();
+    script.onerror = () => {
+      klumpScriptPromise = null;
+      reject(new Error("Failed to load Klump script"));
+    };
+    document.body.appendChild(script);
+  });
+  return klumpScriptPromise;
+}
+
 export default function Cart() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -198,22 +220,7 @@ export default function Cart() {
 
   const totalToPayNow = getInitialPaymentTotal();
 
-  const loadKlumpScript = () => new Promise((resolve, reject) => {
-    if (window.Klump) { resolve(); return; }
-
-    const existing = document.querySelector('script[data-klump]');
-    if (existing) existing.remove();
-
-    const s = document.createElement('script');
-    s.src = 'https://js.useklump.com/klump.js';
-    s.setAttribute('data-klump', 'true');
-    s.onload = () => resolve();
-    s.onerror = () => {
-      s.remove();
-      reject(new Error('Klump script failed to load'));
-    };
-    document.head.appendChild(s);
-  });
+  // Note: We don't define loadKlumpScript here anymore, it's defined outside the component.
 
   const finalizeOrder = async (paymentRef, receiptUrl = '') => {
     try {
