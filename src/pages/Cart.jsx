@@ -98,11 +98,18 @@ export default function Cart() {
     let interval;
     if (klumpOpen) {
       interval = setInterval(() => {
+        // Lower Klump's z-index
         document.querySelectorAll('iframe[src*="klump"], [id^="klump"]').forEach(el => {
           if (el.style && el.id !== 'klump__checkout') {
             el.style.setProperty('z-index', '2147483640', 'important');
           }
         });
+
+        // Ensure our cancel button is always the absolute last element in the DOM
+        const cancelBtn = document.getElementById('klump-cancel-btn-container');
+        if (cancelBtn && cancelBtn.nextSibling) {
+          document.body.appendChild(cancelBtn);
+        }
       }, 500);
     }
     return () => clearInterval(interval);
@@ -474,7 +481,7 @@ export default function Cart() {
       
       {/* Fixed floating cancel button — always on top of Klump's full-screen overlay */}
       {klumpOpen && createPortal(
-        <>
+        <div id="klump-cancel-btn-container" style={{ zIndex: 2147483647 }}>
           {/* Top-right button for desktop */}
           <div className="hidden sm:flex fixed top-0 left-0 right-0 z-[2147483647] justify-end p-4 pointer-events-none">
             <button
@@ -522,7 +529,7 @@ export default function Cart() {
               ✕ Cancel Payment
             </button>
           </div>
-        </>,
+        </div>,
         document.body
       )}
       <div id="klump__checkout" style={{ display: klumpOpen ? 'block' : 'none' }}></div>
