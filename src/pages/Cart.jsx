@@ -45,6 +45,14 @@ function loadKlumpScript() {
   return klumpScriptPromise;
 }
 
+function getKlump() {
+  try {
+    return (0, eval)("Klump");
+  } catch (e) {
+    return undefined;
+  }
+}
+
 export default function Cart() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -383,14 +391,15 @@ export default function Cart() {
           return;
         }
 
-        if (!window.Klump) {
+        const KlumpCtor = getKlump();
+        if (!KlumpCtor) {
           toast.error('Klump failed to initialise.');
           setLoading(false);
           setKlumpOpen(false);
           return;
         }
 
-        new window.Klump({
+        new KlumpCtor({
           publicKey: klumpKey,
           data: {
             amount: totalToPayNow,
