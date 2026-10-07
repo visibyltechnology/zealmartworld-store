@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "",
+  "installCommand": "",
+  "outputDirectory": "",
+  "rewrites": [
+    { "source": "/:path*", "destination": "https://hazel-grove-shop.vercel.app/:path*" }
+  ]
+}
