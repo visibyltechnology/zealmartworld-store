@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "https://hazel-grove-shop.vercel.app/$1"
+    }
+  ]
+}
